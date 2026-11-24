@@ -114,7 +114,7 @@ final class MetadataProtocol: URLProtocol {
         check(AppReleaseVersion("9.7.1-beta.2")! < AppReleaseVersion("9.7.1")!, "stable supersedes prerelease")
         check(AppReleaseVersion("9.7.1-beta.10")! > AppReleaseVersion("9.7.1-beta.2")!, "numeric prerelease identifiers compare numerically")
         check(AppReleaseVersion("garbage") == nil && AppReleaseVersion("9..7") == nil, "invalid release versions rejected")
-        let releaseData = Data(#"{"tag_name":"9.7.1","html_url":"https://github.com/GoldenNugget-Team/GoldenNugget-mobile/releases/tag/9.7.1","body":"Notes","draft":false,"prerelease":false,"assets":[{"name":"app.ipa","browser_download_url":"https://github.com/GoldenNugget-Team/GoldenNugget-mobile/releases/download/9.7.1/app.ipa"}]}"#.utf8)
+        let releaseData = Data(#"{"tag_name":"9.7.1","html_url":"https://github.com/GoldensHQ/GoldenNugget-mobile/releases/tag/9.7.1","body":"Notes","draft":false,"prerelease":false,"assets":[{"name":"app.ipa","browser_download_url":"https://github.com/GoldensHQ/GoldenNugget-mobile/releases/download/9.7.1/app.ipa"}]}"#.utf8)
         let release = try AppRelease.parse(releaseData)
         check(release.isNewer(than: "9.7.0") && !release.isNewer(than: "9.7.1"), "update detection compares installed mobile version")
         check(release.downloadURL?.path.hasSuffix("app.ipa") == true, "official IPA selected")

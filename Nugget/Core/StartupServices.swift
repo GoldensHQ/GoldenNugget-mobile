@@ -35,7 +35,7 @@ enum RemoteMetadata {
 final class HotLoadService: ObservableObject {
     static let shared = HotLoadService()
     static let enabledKey = "hotload_enabled"
-    static let rulesURL = URL(string: "https://raw.githubusercontent.com/GoldenNugget-Team/GoldenNugget-mobile/main/hotload_rules.json")!
+    static let rulesURL = URL(string: "https://raw.githubusercontent.com/GoldensHQ/GoldenNugget-mobile/main/hotload_rules.json")!
     nonisolated static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
 
     @Published private(set) var rules: HotLoadRules

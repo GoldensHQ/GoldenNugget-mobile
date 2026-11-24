@@ -4,18 +4,20 @@ import DeviceGatewayAPI
 import IdeviceGateway
 import IDevice
 
-/// AFC-backed media transfer, moving the bulk photo/video trees out of
-/// `/var/mobile/Media` and into this app's own container.
+/// Optional AFC-backed media transfer, moving the bulk photo/video trees out
+/// of `/var/mobile/Media` and into this app's own container.
+///
+/// This is **not** the media path an apply uses: `PhotoMediaBackup` backs up and
+/// restores through `PHPhotoLibrary` with the user's permission, and no AFC
+/// write is involved in a restore any more. AFC remains here for the one thing
+/// Photos cannot do — delete an original after its copy has been verified — so
+/// the Media page can still offer that as an explicit, destructive option.
 ///
 /// Why AFC and not `mobilebackup2`: the bulk media would otherwise ride the
 /// protective backup, which is slow and — before the prune — transfers the whole
 /// photo library only to throw it away. AFC reads the device's Media root
 /// directly, streamed, one connection per file, so a 2 GB video never has to
 /// exist in memory.
-///
-/// Why not the Photos framework: this needs no `PHPhotoLibrary` authorization
-/// and no `NSPhotoLibraryUsageDescription`. AFC reaches the same files the
-/// library shows, so a permission prompt would buy nothing.
 ///
 /// Why the trees are narrow (`AFC_MEDIA_TREES` in the reference): only the
 /// actual photo/video files move. `PhotoData` — the library database and its
@@ -30,14 +32,19 @@ import IDevice
 ///     directory is the only copy of the user's photos, so a silently skipped
 ///     file is data loss;
 ///   * symlinks are **skipped**, never followed: following one could escape the
-///     Media tree and duplicate content.
+///     Media tree and duplicate content;
+///   * a deleted original is restored by creating a new asset in the photo
+///     library (`PhotoMediaBackup.restore`), not by writing the AFC tree back.
 enum AfcMediaBackup {
     // The Media page and an apply can both call this store. Reserve the whole
     // transfer so journal appends/compaction and Clear cannot race each other.
     private static let transferLock = NSLock()
     private static var transferActive = false
 
-    private static func beginTransfer() throws {
+    /// Reserve the shared store for one transfer. `PhotoMediaBackup` takes the
+    /// same gate: an AFC pull and a native Photos backup both write into this
+    /// container, and neither may race the Media page's Empty action.
+    static func beginStoreTransfer() throws {
         transferLock.lock()
         defer { transferLock.unlock() }
         guard !transferActive else {
@@ -46,7 +53,7 @@ enum AfcMediaBackup {
         transferActive = true
     }
 
-    private static func endTransfer() {
+    static func endStoreTransfer() {
         transferLock.lock()
         transferActive = false
         transferLock.unlock()
@@ -143,8 +150,8 @@ enum AfcMediaBackup {
     }
 
     /// Whether a transfer owns the store right now. A read-only view of the lock
-    /// `beginTransfer` takes, for callers that would otherwise collide with it:
-    /// an apply's media stage and the home page's Restore button.
+    /// `beginStoreTransfer` takes, for callers that would otherwise collide with
+    /// it: an apply's media stage and the home page's Restore button.
     static var isTransferActive: Bool {
         transferLock.lock()
         defer { transferLock.unlock() }
@@ -172,8 +179,8 @@ enum AfcMediaBackup {
         deletingOriginals: Bool,
         onProgress: ((String) -> Void)? = nil
     ) async throws -> Manifest {
-        try beginTransfer()
-        defer { endTransfer() }
+        try beginStoreTransfer()
+        defer { endStoreTransfer() }
         let gateway = try await gateway()
         try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
 
@@ -277,7 +284,8 @@ enum AfcMediaBackup {
 
             // Commit the verified copy BEFORE removing its original. Even if
             // deletion succeeds and the process dies immediately afterwards,
-            // push() can still find and restore the copy (regardless of deleted).
+            // PhotoMediaBackup.restore() can still find the copy and put it
+            // back into the photo library.
             let saved = Entry(source: entry.path, storedAs: relative, size: entry.size,
                               modified: entry.modified, deleted: false)
             let savedIndex: Int
@@ -333,8 +341,9 @@ enum AfcMediaBackup {
     ///
     /// Same rules as the streamed path: the original is removed only after the
     /// device itself still reports the size and date the stored copy was
-    /// verified against. `push` streams any size back now, so size plays no
-    /// part in whether an original is removable.
+    /// verified against. `PhotoMediaBackup.restore` can create an asset of any
+    /// size from the verified copy, so size plays no part in whether an original
+    /// is removable.
     ///
     /// Returns the row to journal as `deleted`, or `nil` when the original was
     /// kept — a kept original is logged, never fatal: the copy is intact either
@@ -364,118 +373,25 @@ enum AfcMediaBackup {
                      modified: entry.modified, deleted: true)
     }
 
-    /// Put everything back after checking the complete local inventory.
-    /// Local copies remain available until the user explicitly clears the store.
-    static func push(onProgress: ((String) -> Void)? = nil) async throws {
-        try beginTransfer()
-        defer { endTransfer() }
-        let manifest = try read()
-        // Fail before writing any device file if a recorded copy is missing,
-        // truncated or linked. A partially valid store is not a successful restore.
-        for entry in manifest.entries {
-            let local = try localMediaPath(entry.storedAs)
-            let attributes = try FileManager.default.attributesOfItem(atPath: local.path)
-            guard attributes[.type] as? FileAttributeType == .typeRegular,
-                  (attributes[.size] as? NSNumber)?.int64Value == entry.size else {
-                throw GoldenNuggetError("AFC media store is incomplete: \(entry.storedAs). Restore stopped; local copies kept.")
-            }
-        }
-        let gateway = try await gateway()
-        var restored = 0
-        var skipped = 0
-
-        for entry in manifest.entries {
-            let local = try localMediaPath(entry.storedAs)
-            // Every level has to exist before the leaf. One afcMakeDirectory call
-            // for "/DCIM/100APPLE" fails when /DCIM is absent, and `try?` used to
-            // swallow exactly that, so the write then failed with a message that
-            // pointed nowhere near the real cause.
-            for directory in ancestors(of: entry.source) {
-                try? await gateway.afcMakeDirectory(path: directory)
-            }
-
-            // Streamed, like the pull: the gateway holds one AFC connection for
-            // the whole file and this side reads the local copy chunk by chunk,
-            // so a 2 GB video never has to exist in one `Data`. The old
-            // whole-file `afcWrite` capped what could be restored at 64 MiB for
-            // exactly that memory reason, which is how restores came back
-            // incomplete with the large originals still sitting in the store.
-            let reader = try StoreChunkReader(url: local)
-            let handed = try await gateway.afcStreamWrite(path: entry.source, chunkSize: chunkSize) {
-                try reader.next($0)
-            }
-            guard handed == entry.size else {
-                throw GoldenNuggetError(
-                    "AFC media store changed while reading \(entry.storedAs). Restore stopped.")
-            }
-
-            // The pull verifies before deleting, so the push verifies before
-            // reporting: a short write is caught here rather than discovered
-            // later as a truncated photo.
-            let written = (try? await gateway.afcEntryInfo(path: entry.source))?.size ?? -1
-            guard written == entry.size else {
-                onProgress?("AFC push: \(entry.source) size mismatch — device reports "
-                    + "\(written), expected \(entry.size)")
-                skipped += 1
-                continue
-            }
-            restored += 1
-            onProgress?("AFC push: \(entry.source)")
-        }
-        onProgress?("AFC push: \(restored) restored, \(skipped) skipped")
-        if skipped > 0 {
-            throw GoldenNuggetError("AFC media restore incomplete: \(skipped) file(s) could not be restored. Local copies kept.")
-        }
-    }
-
-    /// `/DCIM/100APPLE/IMG_0001.JPG` -> `["/DCIM", "/DCIM/100APPLE"]`, outermost
-    /// first, which is the order AFC needs them created in.
-    private static func ancestors(of path: String) -> [String] {
-        var out: [String] = []
-        var parts = path.split(separator: "/").map(String.init)
-        guard parts.count > 1 else { return [] }
-        parts.removeLast()
-        var prefix = ""
-        for part in parts {
-            prefix += "/" + part
-            out.append(prefix)
-        }
-        return out
-    }
-
-    /// A `FileHandle` in a Sendable box, so the gateway's worker can read the
-    /// store's copy off disk chunk by chunk while the async run waits on the
-    /// AFC write. `FileHandle` itself is not `Sendable`; the box is safe because
-    /// exactly one thread — the gateway's worker inside `afcStreamWrite` —
-    /// touches the handle, and `beginTransfer` keeps every other store
-    /// mutation out for the whole transfer.
-    private final class StoreChunkReader: @unchecked Sendable {
-        private let handle: FileHandle
-
-        init(url: URL) throws {
-            self.handle = try FileHandle(forReadingFrom: url)
-        }
-
-        /// Up to `want` bytes from the current offset; empty `Data` at end of
-        /// file, which is the gateway's end-of-input signal.
-        func next(_ want: Int) throws -> Data {
-            guard let data = try handle.read(upToCount: want) else { return Data() }
-            return data
-        }
-
-        deinit { try? handle.close() }
+    /// The verified local copy for a recorded AFC source. Restore no longer
+    /// writes it back over AFC; `PhotoMediaBackup` reads it and creates a new
+    /// asset in the photo library instead.
+    static func storedFile(for relative: String) throws -> URL {
+        try localMediaPath(relative)
     }
 
     /// Empty the store, once the originals are back and verified on the device.
     static func clear() throws {
-        try beginTransfer()
-        defer { endTransfer() }
+        try beginStoreTransfer()
+        defer { endStoreTransfer() }
         let fm = FileManager.default
         if fm.fileExists(atPath: storeRoot.path) { try fm.removeItem(at: storeRoot) }
         // The manifest lives inside the store, so the line above normally takes
         // it. Kept for the case where only the file is there.
         if fm.fileExists(atPath: manifestURL.path) { try fm.removeItem(at: manifestURL) }
         invalidateCache()
+        // The native Photos manifest lives in the same store, so it is gone too.
+        PhotoMediaBackup.invalidateCache()
     }
 
     // MARK: - Internals

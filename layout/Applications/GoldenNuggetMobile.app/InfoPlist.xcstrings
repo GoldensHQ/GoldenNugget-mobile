@@ -13,6 +13,30 @@
         }
       }
     },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Why the app adds photos and videos to the library. Shown in Settings > Privacy > Photos.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoldenNugget restores your backed-up photos and videos into the photo library."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "comment" : "Why the app reads the photo library. Shown in Settings > Privacy > Photos.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoldenNugget backs up your photos and videos into this app's container so they can be restored after a reset."
+          }
+        }
+      }
+    },
     "UTTypeDescription" : {
       "comment" : "The human-readable name of the .mobiledevicepairing document type.",
       "extractionState" : "manual",

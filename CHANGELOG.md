@@ -1,4 +1,42 @@
-# GoldenNugget Mobile — Desktop 9.7.7 Sync
+# GoldenNugget Mobile — Desktop 9.7.10 (`main`) Sync
+
+Manual port from a fresh GitHub CLI clone of desktop `main`, first at `78d5590`
+and re-fetched to `413ee44`, using desktop 9.7.7 (`7f45368`) as the baseline. The
+adjacent `10.0` checkout (`e005a74`) was consulted but its broader preset-v3 work
+was not ported. The generated catalogs already matched the main reference: 369
+tweaks, 53 daemon groups, and unchanged PosterBoard, Skip Setup and PosterKit
+sources.
+
+- Live repository pointers moved to `GoldensHQ`: mobile releases and HotLoad
+  rules, the Community Catalog index/repository (`goldenshq.github.io`), the
+  TemplateBuilder link, the HotLoad check fixture, `docs/hotload-and-updates.md`
+  and README links. Historical references were left alone.
+- Desktop's HotLoad `Path` write fix was already covered by the port's atomic
+  rule-cache write; its empty-plist ScreenTime guard was already covered by the
+  mobile `nullified` compiler path. No behavior change was needed for either.
+- Preset export now offers desktop's write-only merged `.gnmpreset` document
+  (recommended), alongside plain v2 JSON and the portable `.gnpreset` ZIP. The
+  merged file carries a complete v3-style YAML block and a complete v2 JSON
+  block; imports remain JSON/`.gnpreset` only. Full and partial exports share
+  the same writer.
+- Settings now carry a `GNUGGET_VERSION` stamp refreshed after every real
+  preference write, matching desktop 9.7.10. A launch-time `UserDefaults`
+  observer covers SwiftUI `@AppStorage` writes as well as the app's feature-local
+  setters; reads alone do not create the key.
+- App version metadata now follows the 9.7.10 line: marketing version `9.7.10`,
+  build `12`.
+- Media backup and restore now use the native photo-library permission. Every
+  apply backs up new and changed assets; unchanged assets are not exported
+  twice. Restore creates Photos assets from the verified copies — the AFC push
+  path is gone. AFC pull remains only as an optional, non-destructive run extra
+  and as the Media page's way to delete originals, which Photos cannot do.
+  Added `NSPhotoLibraryUsageDescription` and
+  `NSPhotoLibraryAddUsageDescription`.
+- `scripts/build-ipa-xtool.sh --clean` passes with Swift 6.4.2 and xtool 1.24.0,
+  producing `xtool/GoldenNuggetMobile.ipa` (16.4 MB, unsigned). The `xcrun`
+  gates remain unavailable on Linux.
+
+# Earlier: Desktop 9.7.7 Sync
 
 This release ports every applicable fix from desktop 9.7.7 and, for the items
 that cannot exist on an on-device app, documents why. The catalog is unchanged

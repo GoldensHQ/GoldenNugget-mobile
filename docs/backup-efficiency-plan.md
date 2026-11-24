@@ -1,5 +1,14 @@
 # Backup Efficiency Plan: fewer bytes, fewer walks
 
+> **Media update (2026-11-24):** the AFC apply path described in §2.2 is no longer
+> the media path. Every apply now runs `PhotoMediaBackup.backup`, which enumerates
+> `PHAsset`s with the user's permission and exports only new or changed assets;
+> `GoldenNuggetEngine.startAutomaticMediaBackup` is the hourly top-up. AFC pull is
+> an optional second copy (`Dev.UseAfcMediaBackup`) and the Media page's way to
+> delete originals. AFC push was removed entirely — restore creates Photos
+> assets. The rest of this document describes the backup/prune cost work and is
+> kept for its measurements.
+>
 > **Status: P0 / P1a / P1b / P2 landed (2026-10-01); P3 / P4 not started.** Every claim
 > about the current behaviour is cited to a file:line in this repo; every claim about the
 > *device* is labelled as a hypothesis with the evidence that supports it and the

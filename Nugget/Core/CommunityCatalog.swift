@@ -4,8 +4,8 @@ import Foundation
 /// Read-only desktop Community Catalog protocol. Imports are stored locally;
 /// only the existing home Apply action can send their payloads to the device.
 enum CommunityCatalog {
-    static let indexURL = URL(string: "https://goldennugget-team.github.io/GoldenNugget-Presets/index.json")!
-    static let repositoryURL = URL(string: "https://github.com/GoldenNugget-Team/GoldenNugget-Presets")!
+    static let indexURL = URL(string: "https://goldenshq.github.io/GoldenNugget-Presets/index.json")!
+    static let repositoryURL = URL(string: "https://github.com/GoldensHQ/GoldenNugget-Presets")!
     static let directory = URL.documents.appendingPathComponent("Community", isDirectory: true)
     static let cacheURL = directory.appendingPathComponent("preset_catalog.json")
 

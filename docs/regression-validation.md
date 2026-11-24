@@ -5,9 +5,10 @@ The eight findings from the October 17 audit have been addressed:
 - Both Rust RemotePairing readers omit the credential dictionary from logs. The IDevice change is installed by `redact_pairing.patch`. Before enabling file logging, the app removes legacy diagnostic files containing leaked pairing fields; pairing records are preserved.
 - Media pulls preserve existing index entries. A verified copy is recorded in an append-only, synchronized recovery journal before its original can be deleted. Successful pulls atomically compact the journal into the existing JSON index. Interrupted final journal records are ignored and repaired before the next append.
 - Media operations reserve the store for the whole transfer. Clear and a second transfer cannot race journal writes. Invalid existing index data fails the pull before deletion.
-- Originals of any size are removed once their verified copy is stored, and
-  push streams large files back in chunks: the former 64 MiB AFC whole-write
-  cap no longer leaves large originals stuck in the store.
+- Originals of any size can be removed once their verified copy is stored;
+  restore creates Photos assets from that copy through the native permission,
+  so the former 64 MiB AFC whole-write cap is no longer part of the path.
+  Native backup exports only assets whose identity or modification date changed.
 - Engine operations reserve the run before preparation. An abandoned FFI call continues to block new runs until it actually returns, protecting the shared session and backup directory. In-flight accounting starts before either cancellation racer is scheduled.
 - Pairing completion checks its generation before stopping Bonjour or ending background time. Each Rust pairing run writes its own temporary record; only the current successful run can promote it to the canonical pairing path.
 - Numeric imports use the editor's finite/range/type checks and checked integer conversion.
@@ -23,9 +24,9 @@ Run with an already booted iOS 26+ simulator:
 python3 scripts/test-audit-regressions.py --device <simulator-udid>
 ```
 
-The runner concatenates shipping Swift files into a temporary UIKit test app, omitting only imports of unavailable device modules. Production method bodies are compiled as written. AFC, AirLift and the RemotePairing callback backend are replaced by the adjacent hardware doubles; no physical device is contacted.
+The runner concatenates shipping Swift files into a temporary UIKit test app, omitting only imports of unavailable device modules. Production method bodies are compiled as written. AFC, Photos, AirLift and the RemotePairing callback backend are replaced by the adjacent hardware doubles; no physical device is contacted. The Photos double records exports and restores, so incremental backup and restore are checked without a real library.
 
-Validated on iPhone 17 Pro Simulator, iOS 26.5: **34 checks in 13 scenarios, zero failures**. Results and screenshot are written to `build/regression-simulator/`.
+Results and screenshot are written to `build/regression-simulator/`.
 
 All seven existing Swift regression harnesses also pass, including the previously failing status-bar check. The apply-preview harness's documented command now includes its missing dependencies.
 

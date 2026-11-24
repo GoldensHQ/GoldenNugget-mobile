@@ -1,14 +1,18 @@
 import SwiftUI
 import Minimuxer
 
-/// AFC media transfer: the bulk photo/video trees, moved between the device's
-/// `/var/mobile/Media` and this app's container.
+/// Media backup and restore.
 ///
-/// The destructive half is behind its own switch, **off by default**. A first run
-/// copies and verifies; only once the switch is on does a verified copy also
-/// remove the original. That ordering is the whole reason the switch exists --
-/// the store in the container is the only copy of a photo once its original is
-/// gone, and the container is something iOS deletes with the app.
+/// The native path uses the photo-library permission: it copies new and changed
+/// assets into this app's container and writes the stored copies back as new
+/// assets. Every apply backs up incrementally, so the manual button is just a
+/// way to do it between runs.
+///
+/// The optional AFC path still exists for one thing Photos cannot do: deleting
+/// originals. The destructive half is behind its own switch, **off by default**.
+/// A first run copies and verifies; only once the switch is on does a verified
+/// copy also remove the original. The store in the container is then the only
+/// copy of that photo, and iOS deletes the container with the app.
 struct MediaView: View {
     @AppStorage("AfcMedia.deleteOriginals") private var deleteOriginals = false
     @State private var survey: AfcMediaBackup.Survey?
@@ -25,6 +29,7 @@ struct MediaView: View {
     /// them for the whole session -- including after a pull from a previous run,
     /// which is exactly when you come back to push or clear.
     private func loadManifest() {
+        PhotoMediaBackup.ensureService()
         manifest = try? AfcMediaBackup.read()
         hasStoredFiles = storeHasFiles()
     }
@@ -40,18 +45,21 @@ struct MediaView: View {
 
     /// From the filesystem rather than from the last run's manifest: a pull that
     /// was interrupted, or files left by an earlier build, are real data that
-    /// "Empty" must still be able to remove.
+    /// "Empty" must still be able to remove. Both stores share the same root.
     private func storeHasFiles() -> Bool {
         if let m = manifest, !m.entries.isEmpty { return true }
+        if (try? PhotoMediaBackup.read().entries.isEmpty) == false { return true }
         let fm = FileManager.default
         guard let walker = fm.enumerator(atPath: AfcMediaBackup.storeRoot.path) else { return false }
-        for case let name as String in walker where name.hasSuffix(".afcpartial") { return true }
+        for case let name as String in walker
+            where name.hasSuffix(".afcpartial") || name.hasSuffix(".photopartial") { return true }
         return false
     }
 
     var body: some View {
         List {
             mediaSection
+            afcSection
             if !lines.isEmpty { logSection }
             if let error { errorSection(error) }
         }
@@ -77,22 +85,34 @@ struct MediaView: View {
     }
 
     private var mediaSection: some View {
-        Section("AFC media") {
-            NativeNote(String(localized: "Copies \(AfcMediaBackup.trees.joined(separator: " and ")) from the device's Media root over AFC into this app's container. Needs no photo-library permission."))
+        Section("Media backup") {
+            NativeNote("Uses the iOS photo-library permission. Every apply adds new and changed photos and videos to this app's container; nothing is removed from the library. Restore creates new assets from the stored copies.")
+            Button {
+                Task { await backupPhotos() }
+            } label: {
+                Label("Back up photo library", systemImage: "arrow.down.doc.fill")
+            }
+            .disabled(busy)
+            Button {
+                Task { await restoreToPhotos() }
+            } label: {
+                Label("Restore to Photos", systemImage: "arrow.up.doc.fill")
+            }
+            .disabled(busy || !hasStoredFiles)
+        }
+    }
+
+    private var afcSection: some View {
+        Section("AFC media (optional)") {
+            NativeNote(String(localized: "Copies \(AfcMediaBackup.trees.joined(separator: " and ")) from the device's Media root over AFC into this app's container. Only needed to delete originals, which the photo library cannot do."))
             surveyRows
             deleteSwitch
             Button {
                 Task { await pull() }
             } label: {
-                Label("Pull media", systemImage: "arrow.down.doc")
+                Label("Pull media over AFC", systemImage: "arrow.down.doc")
             }
             .disabled(busy)
-            Button {
-                Task { await push() }
-            } label: {
-                Label("Push back to device", systemImage: "arrow.up.doc")
-            }
-            .disabled(busy || !hasStoredFiles)
             // Was `try?` with a success message printed either way, so a failure
             // looked identical to a success. It is routed through run() so the
             // error surfaces, and loadManifest() re-reads rather than assuming
@@ -109,7 +129,7 @@ struct MediaView: View {
                 Label("Empty the local store", systemImage: "trash")
             }
             .disabled(busy || !hasStoredFiles)
-            NativeSafetyNote("Emptying the store is only safe once the originals are back on the device and verified there.")
+            NativeSafetyNote("Emptying the store is only safe once the copies are back in the photo library and verified there.")
         }
     }
 
@@ -191,9 +211,20 @@ struct MediaView: View {
         }
     }
 
-    private func push() async {
+    /// Incremental native backup, the same operation every apply performs.
+    private func backupPhotos() async {
         await run {
-            try await AfcMediaBackup.push { line in
+            _ = try await PhotoMediaBackup.backup { line in
+                Task { @MainActor in lines.append(line) }
+            }
+            loadManifest()
+        }
+    }
+
+    /// Restore through the photo-library permission, never through AFC.
+    private func restoreToPhotos() async {
+        await run {
+            try await PhotoMediaBackup.restore { line in
                 Task { @MainActor in lines.append(line) }
             }
             loadManifest()

@@ -25,7 +25,8 @@ SOURCES = [
     "Nugget/Core/TweakModel.swift", "Nugget/Core/TweakCatalog.swift",
     "Nugget/Core/TweakCatalogDaemons.swift",
     "Nugget/Core/StatusBarModel.swift", "Nugget/Core/StatusBarArchive.swift",
-    "Nugget/Core/AfcMediaBackup.swift", "Nugget/Core/WirelessPairing.swift",
+    "Nugget/Core/AfcMediaBackup.swift", "Nugget/Core/PhotoMediaBackup.swift",
+    "Nugget/Core/WirelessPairing.swift",
     "Nugget/Core/PasscodeTheme.swift", "scripts/regression-simulator-check.swift",
 ]
 DEVICE_IMPORTS = {"import Minimuxer", "import DeviceGatewayAPI", "import IdeviceGateway", "import IDevice"}

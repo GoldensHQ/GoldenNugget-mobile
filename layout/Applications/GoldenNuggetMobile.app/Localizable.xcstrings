@@ -166,7 +166,7 @@
     "AAR handling" : {
 
     },
-    "AFC media" : {
+    "AFC media (optional)" : {
 
     },
     "About" : {
@@ -442,7 +442,7 @@
     "Convert legacy wallpapers to the modern format" : {
 
     },
-    "Copies %@ from the device's Media root over AFC into this app's container. Needs no photo-library permission." : {
+    "Copies %@ from the device's Media root over AFC into this app's container. Only needed to delete originals, which the photo library cannot do." : {
 
     },
     "Copy and remove originals" : {
@@ -654,6 +654,9 @@
     "Export" : {
 
     },
+    "Export Format" : {
+
+    },
     "Extra 1" : {
 
     },
@@ -814,6 +817,9 @@
     "Import result" : {
 
     },
+    "Import still accepts only JSON and portable .gnpreset files." : {
+
+    },
     "Imported (%lld)" : {
 
     },
@@ -842,6 +848,9 @@
 
     },
     "Japanese" : {
+
+    },
+    "JSON Files (*.json)" : {
 
     },
     "Keeps the %@(…) wrapper it shipped with." : {
@@ -938,6 +947,12 @@
 
     },
     "Mercury" : {
+
+    },
+    "Merged Export (recommended) (*.gnmpreset)" : {
+
+    },
+    "Merged export is for newer GoldenNugget builds; older builds can extract the v2 JSON block." : {
 
     },
     "Microphone" : {
@@ -1100,6 +1115,9 @@
     "Polish" : {
 
     },
+    "Portable Preset with Templates and Icons (*.gnpreset)" : {
+
+    },
     "Portuguese" : {
 
     },
@@ -1127,7 +1145,7 @@
     "Pull" : {
 
     },
-    "Pull media" : {
+    "Pull media over AFC" : {
 
     },
     "Pull to This Device" : {
@@ -1136,7 +1154,7 @@
     "Pulling %lld%%" : {
 
     },
-    "Push back to device" : {
+    "Restore to Photos" : {
 
     },
     "Quick Look" : {
@@ -1421,7 +1439,7 @@
     "Siri AI eligibility archives" : {
 
     },
-    "Skip AFC media" : {
+    "Optional AFC media backup" : {
 
     },
     "Skip Setup" : {
@@ -1801,7 +1819,28 @@
         }
       }
     },
-    "⚠️ A PosterBoard reset is armed (%@). A reset run clears the store and installs no wallpapers, so with wallpapers selected as well Apply refuses until one of the two is turned off." : {}
+    "⚠️ A PosterBoard reset is armed (%@). A reset run clears the store and installs no wallpapers, so with wallpapers selected as well Apply refuses until one of the two is turned off." : {},
+    "Media backup" : {
+
+    },
+    "Back up photo library" : {
+
+    },
+    "Uses the iOS photo-library permission. Every apply adds new and changed photos and videos to this app's container; nothing is removed from the library. Restore creates new assets from the stored copies." : {
+
+    },
+    "Every apply backs up new and changed media with your photo-library permission; this writes the kept copies back into the photo library." : {
+
+    },
+    "Emptying the store is only safe once the copies are back in the photo library and verified there." : {
+
+    },
+    "Media restored to the photo library." : {
+
+    },
+    "Every apply already backs up new and changed photos through the photo library. This adds a second, non-destructive copy of the device's Media tree via AFC. Only originals AFC cannot reach need it; deleting originals stays on the Media page." : {
+
+    }
   },
   "version" : "1.0"
 }

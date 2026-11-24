@@ -93,7 +93,7 @@ struct TemplatesView: View {
             } label: {
                 Label("Import .batter template", systemImage: "plus.circle")
             }
-            Link(destination: URL(string: "https://github.com/GoldenNugget-Team/GoldenNugget-TemplateBuilder/releases/latest")!) {
+            Link(destination: URL(string: "https://github.com/GoldensHQ/GoldenNugget-TemplateBuilder/releases/latest")!) {
                 Label("Create a template with Batter Builder", systemImage: "square.and.pencil")
             }
             NavigationLink("Community template switches") { CommunityCatalogView() }

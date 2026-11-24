@@ -19,7 +19,7 @@ struct SettingsView: View {
     @AppStorage(DevSettings.Key.enabled) private var devModeOn = false
     @AppStorage(DevSettings.Key.forcePartialRestore) private var forcePartialRestore = false
     @AppStorage(DevSettings.Key.verboseLog) private var verboseLog = true
-    @AppStorage(DevSettings.Key.skipAfcMedia) private var skipAfcMedia = false
+    @AppStorage(DevSettings.Key.useAfcMediaBackup) private var useAfcMediaBackup = false
 
     /// Skip Setup's switch. Observed rather than mirrored with a second
     /// `@AppStorage` on the same key: the store is what the engine reads.
@@ -422,11 +422,13 @@ struct SettingsView: View {
                             : String(localized: "Protocol detail is not being recorded. The app log still is."),
                           isOn: $verboseLog)
 
-                switchRow("Skip AFC media",
-                          note: "A run normally copies camera-roll media between the "
-                              + "backup and the prune. This leaves it out, which on a full "
-                              + "camera roll is the difference between minutes and seconds.",
-                          isOn: $skipAfcMedia)
+                switchRow("Optional AFC media backup",
+                          note: "Every apply already backs up new and changed photos "
+                              + "through the photo library. This adds a second, non-destructive "
+                              + "copy of the device's Media tree via AFC. Only originals "
+                              + "AFC cannot reach need it; deleting originals stays on the "
+                              + "Media page.",
+                          isOn: $useAfcMediaBackup)
 
                 Button("Reset switches", systemImage: "arrow.counterclockwise") {
                     DevSettings.resetSwitches()

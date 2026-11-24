@@ -42,6 +42,7 @@ PRUNE_RE = re.compile(r"Pruned Manifest\.db: (?P<kept>\d+) of (?P<rows>\d+) row\
 AFC_RE = re.compile(r"AFC media: (?P<files>\d+) file\(s\)(?:, (?P<size>.+?))?$")
 AFC_SKIP_RE = re.compile(r"AFC media: (?P<files>\d+) file\(s\) already stored, "
                          r"(?P<bytes>\d+) byte\(s\) not transferred")
+PHOTOS_RE = re.compile(r"Photos: (?:\d+ (?:asset|file)\(s\).*|\d+ new or changed asset\(s\), .+)$")
 RESTORE_RE = re.compile(r"restore verified: the device reported (?P<pct>\d+)%")
 RETRY_RE = re.compile(r"attempt (?P<n>\d+)/(?P<of>\d+) ")
 BASELINE_RE = re.compile(r"baseline: (?P<what>.*)")
@@ -73,6 +74,7 @@ class Run:
     afc_bytes: int = 0
     afc_skipped_files: int = 0
     afc_skipped_bytes: int = 0
+    photos: list[str] = field(default_factory=list)
     restore_pct: int | None = None
     retries: int = 0
     baseline: list[str] = field(default_factory=list)
@@ -138,6 +140,9 @@ def parse(lines: list[str]) -> list[Run]:
             current.afc_files = max(current.afc_files, int(match.group("files")))
             current.afc.append(line.strip())
 
+        if PHOTOS_RE.search(line):
+            current.photos.append(line.strip())
+
         match = RESTORE_RE.search(line)
         if match:
             current.restore_pct = int(match.group("pct"))
@@ -201,6 +206,12 @@ def report(run: Run, width: int = 78) -> str:
             out.append(f"    skipped   {run.afc_skipped_files} file(s) / "
                        f"{human(run.afc_skipped_bytes)} already stored (no transfer)")
         for line in run.afc[:6]:
+            out.append(f"    {line[:100]}")
+
+    if run.photos:
+        out.append("")
+        out.append("  native media backup")
+        for line in run.photos[:6]:
             out.append(f"    {line[:100]}")
 
     if run.baseline:

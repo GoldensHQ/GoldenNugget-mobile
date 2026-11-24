@@ -39,6 +39,7 @@ struct PresetManagerView: View {
     @State private var pendingDelete: GoldenNuggetPresets.PresetInfo?
     @State private var share: ShareItem?
     @State private var partialExport: PartialExportTarget?
+    @State private var pendingExport: ExportTarget?
     @State private var showImporter = false
 
     var body: some View {
@@ -99,9 +100,17 @@ struct PresetManagerView: View {
         .sheet(item: $partialExport) { target in
             PartialExportSheet(target: target) { include in
                 partialExport = nil
-                export(include: include)
+                pendingExport = ExportTarget(name: target.info.name, include: include)
             } onCancel: {
                 partialExport = nil
+            }
+        }
+        .sheet(item: $pendingExport) { target in
+            ExportFormatSheet(target: target) { format in
+                pendingExport = nil
+                export(target, format: format)
+            } onCancel: {
+                pendingExport = nil
             }
         }
     }
@@ -162,7 +171,7 @@ struct PresetManagerView: View {
         Section {
             Button("Load") { requestLoad() }
                 .disabled(selected == nil)
-            Button("Export") { export(include: nil) }
+            Button("Export") { requestExport(include: nil) }
                 .disabled(selected == nil)
             Button("Partial Export…") { requestPartialExport() }
                 .disabled(selected == nil)
@@ -347,20 +356,35 @@ struct PresetManagerView: View {
         setMessage(label, .success)
     }
 
-    private func export(include: Set<String>?) {
+    /// Desktop's save dialog offers three formats, merged first. iOS has no
+    /// save panel here, so the same choice is a sheet before the share sheet.
+    private func requestExport(include: Set<String>?) {
         guard let info = selected else {
             setMessage("Select a preset first.", .warning)
             return
         }
-        guard let data = GoldenNuggetPresets.exportData(for: info.name, include: include) else {
+        pendingExport = ExportTarget(name: info.name, include: include)
+    }
+
+    private func export(_ target: ExportTarget, format: PresetExportFormat) {
+        guard let data = GoldenNuggetPresets.exportData(for: target.name, include: target.include) else {
             setMessage("Failed to export preset.", .error)
             return
         }
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(GoldenNuggetPresets.sanitize(info.name)).gnpreset")
+            .appendingPathComponent("\(GoldenNuggetPresets.sanitize(target.name)).\(format.fileExtension)")
         do {
-            guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw CommunityError("Invalid preset.") }
-            try PortablePreset.export(document, to: url)
+            switch format {
+            case .merged:
+                try MergedPresetExport.write(data, to: url)
+            case .json:
+                try data.write(to: url, options: .atomic)
+            case .portable:
+                guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw CommunityError("Invalid preset.")
+                }
+                try PortablePreset.export(document, to: url)
+            }
             share = ShareItem(url: url)
         } catch {
             setMessage("Failed to export preset: \(error.localizedDescription)", .error)
@@ -443,6 +467,75 @@ struct PresetManagerView: View {
 }
 
 // MARK: - Export support
+
+/// What the desktop's save dialog collects: a preset name, an optional tweak
+/// subset from Partial Export, and then the format chosen below.
+private struct ExportTarget: Identifiable {
+    let name: String
+    let include: Set<String>?
+    var id: String { name + "_" + (include?.sorted().joined(separator: ",") ?? "all") }
+}
+
+/// The three export choices from desktop `preset_menu.py:64-86`. Merged is
+/// first and is the default suggested file name there; raw v3 has no choice
+/// because this build only writes the compatibility document.
+private enum PresetExportFormat: String, CaseIterable, Identifiable {
+    case merged = "Merged Export (recommended) (*.gnmpreset)"
+    case json = "JSON Files (*.json)"
+    case portable = "Portable Preset with Templates and Icons (*.gnpreset)"
+
+    var id: String { rawValue }
+    var title: String { rawValue }
+
+    var fileExtension: String {
+        switch self {
+        case .merged: return "gnmpreset"
+        case .json: return "json"
+        case .portable: return "gnpreset"
+        }
+    }
+}
+
+private struct ExportFormatSheet: View {
+    let target: ExportTarget
+    let onExport: (PresetExportFormat) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(PresetExportFormat.allCases) { format in
+                        Button {
+                            onExport(format)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(format.title)
+                                    .foregroundStyle(.primary)
+                                if format == .merged {
+                                    Text("Merged export is for newer GoldenNugget builds; older builds can extract the v2 JSON block.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Export Format")
+                } footer: {
+                    Text("Import still accepts only JSON and portable .gnpreset files.")
+                }
+            }
+            .navigationTitle(target.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                }
+            }
+        }
+    }
+}
 
 /// A file handed to the share sheet.  `Identifiable` so `.sheet(item:)` can
 /// present one per export.

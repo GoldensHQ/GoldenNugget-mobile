@@ -80,21 +80,21 @@ Wanted support? join our [Discord Server][server].
 
 **Thanks everyone who contributes to project!** 🎉
 
-<a href="https://github.com/goldennugget-team/goldennugget-mobile/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=goldennugget-team/goldennugget-mobile" />
+<a href="https://github.com/goldenshq/goldennugget-mobile/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=goldenshq/goldennugget-mobile" />
 </a>
 
-Want to see your name here? Open [Pull Request](https://github.com/GoldenNugget-Team/GoldenNugget-mobile/pulls)!
+Want to see your name here? Open [Pull Request](https://github.com/GoldensHQ/GoldenNugget-mobile/pulls)!
 
 </div>
 
 ## Star History
 
-<a href="https://www.star-history.com/?type=date&repos=GoldenNugget-mobile%2FGoldenNugget-mobile">
+<a href="https://www.star-history.com/?type=date&repos=GoldensHQ%2FGoldenNugget-mobile">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=GoldenNugget-Team/GoldenNugget-mobile&type=date&theme=dark&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=GoldenNugget-Team/GoldenNugget-mobile&type=date&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=GoldenNugget-Team/GoldenNugget-mobile&type=date&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=GoldensHQ/GoldenNugget-mobile&type=date&theme=dark&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=GoldensHQ/GoldenNugget-mobile&type=date&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=GoldensHQ/GoldenNugget-mobile&type=date&legend=top-left&sealed_token=3Suw7Y0hFqwuBPijtmeM2A7pzK2ZCvEPoousYMJzOVFnPza-Aq5SzgNnEcgveIpQsBLEOL2QRtxwZbmaxn_S_3Lf9l0jINrMfRWkjFWGo3dVYCrFRpN6dA" />
  </picture>
 </a>
 
@@ -113,7 +113,7 @@ Swift 6+ (Untested with older, may work)
 macOS 15.6 Sequoia+ or Ubuntu 22.04+
 
 # Contributing and forking.
-See [CONTRIBUTING.md](https://github.com/GoldenNugget-Team/GoldenNugget-mobile/blob/main/CONTRIBUTING.md), want fork instead? Then see [FORKING.md](https://github.com/GoldenNugget-Team/GoldenNugget-mobile/blob/main/FORKING.md)
+See [CONTRIBUTING.md](https://github.com/GoldensHQ/GoldenNugget-mobile/blob/main/CONTRIBUTING.md), want fork instead? Then see [FORKING.md](https://github.com/GoldensHQ/GoldenNugget-mobile/blob/main/FORKING.md)
 
 ## HotLoad and updates
 
@@ -139,7 +139,7 @@ See [rule format and behavior](docs/hotload-and-updates.md).
 
 [caplayground]: https://caplayground.vercel.app/wallpapers
 [i18n]: https://github.com/awesomenull-dev/gNugget-i18n
-[NuggetLogo]: https://github.com/GoldenNugget-Team/GoldenNugget-mobile/blob/main/layout/Applications/GoldenNuggetMobile.app/Logo%401x.png
+[NuggetLogo]: https://github.com/GoldensHQ/GoldenNugget-mobile/blob/main/layout/Applications/GoldenNuggetMobile.app/Logo%401x.png
 [LeminLimez]: https://github.com/leminlimez
 [CowabungaLite]: https://github.com/leminlimez/CowabungaLite
 [WallpapersWebsite]: https://cowabun.ga/wallpapers

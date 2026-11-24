@@ -19,8 +19,9 @@ import zlib
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ["TweakModel", "TweakCatalog", "TweakCatalogDaemons", "TweakDomainMap", "TweakCompiler",
            "GoldenNuggetPreset", "GoldenNuggetPresets", "GoldenNuggetAutosave", "PresetShareCode",
-           "CommunityCatalog", "CommunityTemplates", "PortablePreset", "CommunityApplyRecord",
-           "TweakReset", "StatusBarModel", "StatusBarArchive", "StatusBarSelection"]
+           "CommunityCatalog", "CommunityTemplates", "PortablePreset", "MergedPresetExport",
+           "SettingsVersionStamp", "CommunityApplyRecord", "TweakReset", "StatusBarModel",
+           "StatusBarArchive", "StatusBarSelection"]
 SUPPORT = r'''
 import Foundation
 struct GoldenNuggetError: LocalizedError {
@@ -248,6 +249,41 @@ extension URL {
         check(store.templates.filter(\.active).count == 1, "explicit preset load activates its templates only")
         rejects("portable checksum mismatch rejected") { _ = try PortablePreset.decode(root.appendingPathComponent("tampered.gnpreset")) }
         rejects("portable undeclared asset rejected") { _ = try PortablePreset.decode(root.appendingPathComponent("unlisted.gnpreset")) }
+
+        // Desktop main 413ee44: write-only merged export + writer stamp.
+        SettingsVersionStamp.writerVersionOverride = "9.7.10"
+        let mergedSample: [String: Any] = [
+            "tweaks": ["RTL": ["enabled": true, "value": ["yes": "on", "count": 3]]],
+            "metadata": ["version": 2, "description": "first line\nsecond line",
+                         "device_model": "iPhone15,2", "ios_version": "26.2",
+                         "tags": ["on", "yes"]],
+            "exported": true,
+        ]
+        let mergedDocument = MergedPresetExport.dumps(mergedSample)
+        check(mergedDocument.contains("PresetVersion: 3") &&
+              mergedDocument.contains("GNVersion: \"9.7.10\"") &&
+              mergedDocument.contains("Device: iPhone15,2") &&
+              mergedDocument.contains("OSVersion: iPhoneOS 26.2") &&
+              mergedDocument.contains("Includes: 3,2") &&
+              mergedDocument.contains(MergedPresetExport.note), "merged export header")
+        let mergedV2Text = MergedPresetExport.literalBlock(mergedDocument, key: MergedPresetExport.v2Key)
+        let mergedV2 = try JSONSerialization.jsonObject(with: mergedV2Text.data(using: .utf8)!) as! [String: Any]
+        check((mergedV2["metadata"] as? [String: Any])?["version"] as? Int == 2 &&
+              ((mergedV2["tweaks"] as? [String: Any])?["RTL"] as? [String: Any])?["enabled"] as? Bool == true,
+              "merged v2 block is a complete legacy preset")
+        let mergedV3 = MergedPresetExport.literalBlock(mergedDocument, key: MergedPresetExport.v3Key)
+        check(mergedV3.contains("metadata: {") && mergedV3.contains("tweaks: {") &&
+              mergedV3.contains("GNUGGET_VERSION: \"9.7.10\""), "merged v3 block is a YAML-style preset")
+        let mergedURL = root.appendingPathComponent("Merged.gnmpreset")
+        try MergedPresetExport.write(try JSONSerialization.data(withJSONObject: mergedSample), to: mergedURL)
+        check(try String(contentsOf: mergedURL, encoding: .utf8) == mergedDocument, "merged export writes deterministically")
+        let (mergedImported, _) = PortablePreset.importFile(mergedURL)
+        check(!mergedImported, "merged export stays write-only")
+        UserDefaults.standard.removeObject(forKey: SettingsVersionStamp.writerVersionKey)
+        SettingsVersionStamp.apply()
+        check(UserDefaults.standard.string(forKey: SettingsVersionStamp.writerVersionKey) == "9.7.10",
+              "settings carry the writer version stamp")
+
         try CommunityApplyRecord.record(payloads + [TweakPayload(domain: "HomeDomain", relativePath: "Library/test.bin", contents: Data([1]))], udid: "device-a")
         let plan = try CommunityApplyRecord.resetPlan("device-a")
         check(plan.payloads.count == 1 && plan.remaining.count == 1, "reset clears only managed preferences and reports other files")

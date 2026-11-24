@@ -27,11 +27,11 @@ enum DevSettings {
         static let enabled = "Dev.Enabled"
         static let forcePartialRestore = "Dev.ForcePartialRestore"
         static let verboseLog = "Dev.VerboseLog"
-        static let skipAfcMedia = "Dev.SkipAfcMedia"
+        static let useAfcMediaBackup = "Dev.UseAfcMediaBackup"
     }
 
     /// The `UserDefaults` keys in declaration order, for the reset action.
-    static let allKeys = [Key.forcePartialRestore, Key.verboseLog, Key.skipAfcMedia]
+    static let allKeys = [Key.forcePartialRestore, Key.verboseLog, Key.useAfcMediaBackup]
 
     private static var defaults: UserDefaults { .standard }
 
@@ -71,13 +71,14 @@ enum DevSettings {
         set { defaults.set(newValue, forKey: Key.verboseLog) }
     }
 
-    /// Skip the AFC media pull that a run performs between the backup and the prune.
-    /// With a full camera roll that stage is minutes of the run and the stage a Stop
-    /// most often lands in, so this is how a run gets timed without it.
-    /// The reference spells it `GOLDENNUGGET_NO_AFC_MEDIA`.
-    static var skipAfcMedia: Bool {
-        get { defaults.bool(forKey: Key.skipAfcMedia) }
-        set { defaults.set(newValue, forKey: Key.skipAfcMedia) }
+    /// Add a second, AFC-based copy of the device's Media tree to an apply.
+    /// Off by default: every apply already backs up through the photo library.
+    /// The only reason to turn this on is AFC's ability to reach files Photos
+    /// does not expose; it is always non-destructive on a run. Deleting
+    /// originals stays a manual choice on the Media page.
+    static var useAfcMediaBackup: Bool {
+        get { defaults.bool(forKey: Key.useAfcMediaBackup) }
+        set { defaults.set(newValue, forKey: Key.useAfcMediaBackup) }
     }
 
     // MARK: - What a run obeys
@@ -87,7 +88,7 @@ enum DevSettings {
     struct Effective: Equatable {
         var forcePartialRestore = false
         var verboseLog = true
-        var skipAfcMedia = false
+        var useAfcMediaBackup = false
     }
 
     static var effective: Effective {
@@ -95,7 +96,7 @@ enum DevSettings {
                   // Logging is the one switch that is *restored* rather than gated:
                   // see `applyLoggingPreference`.
                   verboseLog: enabled ? verboseLog : true,
-                  skipAfcMedia: enabled && skipAfcMedia)
+                  useAfcMediaBackup: enabled && useAfcMediaBackup)
     }
 
     /// Push the logging switch into the vendor.

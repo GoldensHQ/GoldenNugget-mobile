@@ -8,6 +8,7 @@ final class RegressionSuite {
     var checks = 0
     var failures: [String] = []
     var completed: [String] = []
+    var fakePhotos = FakePhotosService()
 
     func check(_ condition: Bool, _ message: String) {
         checks += 1
@@ -23,6 +24,10 @@ final class RegressionSuite {
         try FileManager.default.createDirectory(at: AppPaths.root, withIntermediateDirectories: true)
         let gateway = IdeviceGateway()
         Minimuxer.shared().ideviceGateway = gateway
+        // Each scenario gets a fresh photo library double as well as a fresh
+        // AFC gateway; the shipping build installs Photos instead.
+        fakePhotos = FakePhotosService()
+        PhotoMediaBackup.installFake(fakePhotos)
         return gateway
     }
     func all() async {
@@ -53,8 +58,9 @@ final class RegressionSuite {
             self.check(gateway.removed == ["/DCIM/a.jpg"], "only verified first original removed")
             self.check(manifest.entries.map(\.source) == ["/DCIM/a.jpg"], "deleted file remains in committed journal")
             gateway.failurePath = nil
-            try await AfcMediaBackup.push()
-            self.check(gateway.files["/DCIM/a.jpg"] == Data([1]), "interrupted pull is restorable")
+            try await PhotoMediaBackup.restore { _ in }
+            self.check(fakePhotos.restored["a.jpg"] == Data([1]),
+                       "interrupted pull is restorable into the photo library")
         }
         await run("repeated and empty pulls preserve prior copies") {
             let gateway = try self.resetStore("repeat")
@@ -110,27 +116,38 @@ final class RegressionSuite {
             catch {}
             self.check(gateway.removed.isEmpty, "changed source stays on device")
         }
-        await run("incomplete media store fails before device writes") {
-            let gateway = try self.resetStore("truncated-store")
-            gateway.files = ["/DCIM/a.jpg": Data([1]), "/DCIM/b.jpg": Data([2, 3])]
-            _ = try await AfcMediaBackup.pull(deletingOriginals: false)
-            try Data([2]).write(to: AppPaths.mediaStore.appendingPathComponent("DCIM/b.jpg"))
-            do { try await AfcMediaBackup.push(); self.check(false, "truncated media store must fail") }
-            catch {}
-            self.check(gateway.writes.isEmpty, "inventory is checked before any AFC write")
+        await run("incomplete native store fails before a library write") {
+            _ = try self.resetStore("truncated-store")
+            self.fakePhotos.library = [.init(identifier: "A1", filename: "a.jpg",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             data: Data([1, 2]))]
+            _ = try await PhotoMediaBackup.backup { _ in }
+            try Data([2]).write(to: AppPaths.mediaStore.appendingPathComponent("Photos/A1/a.jpg"))
+            do {
+                try await PhotoMediaBackup.restore { _ in }
+                self.check(false, "truncated media store must fail")
+            } catch {}
+            self.check(self.fakePhotos.restored.isEmpty,
+                       "inventory is checked before any library write")
         }
-        await run("linked media store paths cannot be restored") {
-            let gateway = try self.resetStore("linked-store")
-            gateway.files = ["/DCIM/a.jpg": Data([1])]
-            _ = try await AfcMediaBackup.pull(deletingOriginals: false)
-            let file = AppPaths.mediaStore.appendingPathComponent("DCIM/a.jpg")
+        await run("linked native copies cannot be restored") {
+            _ = try self.resetStore("linked-store")
+            self.fakePhotos.library = [.init(identifier: "L1", filename: "a.jpg",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             data: Data([1]))]
+            _ = try await PhotoMediaBackup.backup { _ in }
+            let file = AppPaths.mediaStore.appendingPathComponent("Photos/L1/a.jpg")
             let outside = AppPaths.root.appendingPathComponent("outside.jpg")
             try Data([9]).write(to: outside)
             try FileManager.default.removeItem(at: file)
             try FileManager.default.createSymbolicLink(at: file, withDestinationURL: outside)
-            do { try await AfcMediaBackup.push(); self.check(false, "linked media must fail") }
-            catch {}
-            self.check(gateway.writes.isEmpty, "linked copy never reaches device")
+            do {
+                try await PhotoMediaBackup.restore { _ in }
+                self.check(false, "linked media must fail")
+            } catch {}
+            self.check(self.fakePhotos.restored.isEmpty, "linked copy never reaches the library")
         }
         await run("media clear cannot race a live transfer") {
             let gateway = try self.resetStore("transfer-lock")
@@ -174,9 +191,60 @@ final class RegressionSuite {
                        "a verified large copy removes its original")
             self.check(manifest.entries.first?.deleted == true,
                        "large copy journaled as deleted")
-            try await AfcMediaBackup.push()
-            self.check(gateway.files["/DCIM/video.mov"]?.count == Int(gateway.largeSize),
-                       "the large file streams back whole")
+            try await PhotoMediaBackup.restore { _ in }
+            self.check(self.fakePhotos.restored["video.mov"]?.count == Int(gateway.largeSize),
+                       "the large file is restored into the photo library whole")
+        }
+        await run("native backup adds only new or changed assets") {
+            _ = try self.resetStore("photos-incremental")
+            self.fakePhotos.library = [.init(identifier: "P1", filename: "a.jpg",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             data: Data([1, 2, 3]))]
+            _ = try await PhotoMediaBackup.backup { _ in }
+            self.check(fakePhotos.exportCounts["P1"] == 1, "first backup exports the asset")
+            _ = try await PhotoMediaBackup.backup { _ in }
+            self.check(fakePhotos.exportCounts["P1"] == 1, "unchanged asset is not exported twice")
+            self.fakePhotos.library[0].data = Data([1, 2, 3, 4])
+            self.fakePhotos.library[0].modified = Date(timeIntervalSince1970: 300)
+            _ = try await PhotoMediaBackup.backup { _ in }
+            self.check(fakePhotos.exportCounts["P1"] == 2, "changed asset is exported again")
+            self.check(try Data(contentsOf: AppPaths.mediaStore
+                .appendingPathComponent("Photos/P1/a.jpg")) == Data([1, 2, 3, 4]),
+                "the stored copy is replaced")
+            self.fakePhotos.library.append(.init(identifier: "P2", filename: "b.jpg",
+                                                 created: Date(timeIntervalSince1970: 110),
+                                                 modified: Date(timeIntervalSince1970: 210),
+                                                 data: Data([9])))
+            _ = try await PhotoMediaBackup.backup { _ in }
+            self.check(fakePhotos.exportCounts["P2"] == 1, "new asset is picked up")
+            self.check(try PhotoMediaBackup.read().entries.count == 2,
+                       "both assets are in the native manifest")
+        }
+        await run("native restore writes stored copies into the library") {
+            _ = try self.resetStore("photos-restore")
+            self.fakePhotos.library = [.init(identifier: "R1", filename: "holiday.mov",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             isVideo: true, data: Data([7, 8]))]
+            _ = try await PhotoMediaBackup.backup { _ in }
+            // Simulate a wiped library: a restore must work from the store alone.
+            self.fakePhotos.library = []
+            try await PhotoMediaBackup.restore { _ in }
+            self.check(fakePhotos.restored["holiday.mov"] == Data([7, 8]),
+                       "stored video is added back to the library")
+        }
+        await run("denied photo permission fails without changing the store") {
+            _ = try self.resetStore("photos-denied")
+            self.fakePhotos.denied = true
+            self.fakePhotos.library = [.init(identifier: "D1", filename: "a.jpg",
+                                             created: nil, modified: nil, data: Data([1]))]
+            do {
+                _ = try await PhotoMediaBackup.backup { _ in }
+                self.check(false, "denied permission must throw")
+            } catch {}
+            self.check(self.fakePhotos.exportCounts.isEmpty, "no export without permission")
+            self.check(try PhotoMediaBackup.read().entries.isEmpty, "manifest stays empty")
         }
         await run("journal write failure cannot delete original") {
             let gateway = try self.resetStore("journal-error")

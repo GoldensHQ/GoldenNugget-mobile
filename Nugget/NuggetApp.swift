@@ -10,6 +10,17 @@ struct GoldenNuggetApp: App {
         // mean a session's minimuxer.log was recorded under the wrong setting.
         DevSettings.applyLoggingPreference()
 
+        // Desktop 9.7.10 marks the settings file with the build that last wrote
+        // it. Mobile has many feature-local UserDefaults writers rather than one
+        // Settings wrapper, so the observer is installed here: reads never
+        // create a stamp, and every real preference write refreshes it.
+        SettingsVersionStamp.install()
+
+        // Install the native Photos backend at launch. Backups can start from
+        // the setup guide before any media page or apply has been seen, and a
+        // missing service would otherwise turn the first one into a log line.
+        PhotoMediaBackup.ensureService()
+
         // AirLift's log sink, installed at launch for two reasons.  The library
         // is linked into the binary, and a launch is the only moment a static
         // archive's symbols are proven good: if the linker or the packager had

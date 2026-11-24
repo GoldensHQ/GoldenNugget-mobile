@@ -131,3 +131,66 @@ enum AirliftPairing {
         throw GoldenNuggetError("No RemotePairing device in simulator tests")
     }
 }
+
+/// Hardware double for the Photos framework. It records exports and restores
+/// instead of touching a real library, so the native backup/restore store logic
+/// can be exercised on a simulator without a permission prompt.
+final class FakePhotosService: PhotoMediaBackup.Service, @unchecked Sendable {
+    struct Asset {
+        var identifier: String
+        var filename: String
+        var created: Date?
+        var modified: Date?
+        var isVideo: Bool = false
+        var data: Data
+    }
+
+    var library: [Asset] = []
+    var exportCounts: [String: Int] = [:]
+    var restored: [String: Data] = [:]
+    var denied = false
+
+    func authorizeForBackup() async throws {
+        if denied { throw GoldenNuggetError("Photos: access is off") }
+    }
+
+    func authorizeForRestore() async throws {
+        if denied { throw GoldenNuggetError("Photos: access is off") }
+    }
+
+    func assets() async throws -> [PhotoMediaBackup.Descriptor] {
+        library.map {
+            PhotoMediaBackup.Descriptor(identifier: $0.identifier, filename: $0.filename,
+                                        created: $0.created, modified: $0.modified,
+                                        isVideo: $0.isVideo)
+        }
+    }
+
+    func write(_ asset: PhotoMediaBackup.Descriptor, to destination: URL) async throws -> Int64 {
+        guard let match = library.first(where: { $0.identifier == asset.identifier }) else {
+            throw GoldenNuggetError("Photos: asset not in library")
+        }
+        exportCounts[asset.identifier, default: 0] += 1
+        try match.data.write(to: destination)
+        return Int64(match.data.count)
+    }
+
+    func restore(_ items: [PhotoMediaBackup.RestoreAsset],
+                 onProgress: @Sendable (String) -> Void) async throws {
+        for item in items {
+            restored[item.filename] = try Data(contentsOf: item.url)
+            onProgress("Photos: added \(item.filename)")
+        }
+    }
+}
+
+extension PhotoMediaBackup {
+    static func ensureService() {
+        guard !hasService else { return }
+        install(FakePhotosService())
+    }
+
+    /// Install a fresh double for one scenario. Production builds get this
+    /// method's counterpart from `PhotoLibraryService.swift` instead.
+    static func installFake(_ service: FakePhotosService) { install(service) }
+}

@@ -496,13 +496,12 @@ struct FirstRunView: View {
     /// Leave the guide with both steps satisfied, and start the copy.
     private func finish() {
         firstRun.complete(reason: "tunnel and pairing record both ready")
-        // Start the photo/video copy here, while the tunnel is known to
-        // be up and the user is still on a screen that explains it. The
-        // order matters: the record is already complete, so a pull that
-        // outlives this page is not tied to it. The engine waits for
-        // minimuxer before it touches AFC, which is why this call can
-        // happen before the home page's `.task` starts it.
-        GoldenNuggetEngine.shared.startAutomaticMediaPull(
+        // Start the photo/video copy here, while the user is still on a
+        // screen that explains it. The record is already complete, so a
+        // backup that outlives this page is not tied to it. Photos needs no
+        // tunnel, so this can start before the home page's `.task` asks for
+        // the hourly top-up.
+        GoldenNuggetEngine.shared.startAutomaticMediaBackup(
             reason: "setup finished", force: true)
         onClose?()
     }

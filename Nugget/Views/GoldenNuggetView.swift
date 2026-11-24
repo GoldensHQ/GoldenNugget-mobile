@@ -249,17 +249,16 @@ struct GoldenNuggetView: View {
             // on the page from the first frame, and a session that never gets a
             // gateway still shows what the container already holds.
             refreshMediaTotals()
-            // Top up the container's photo/video copy. Only after the device has
-            // answered: a pull started before minimuxer's gateway exists would be
-            // a log line about a tunnel that is actually fine. The pull is
-            // rate-limited to one an hour and skips every file already stored at
-            // the same size and date, so a launch costs a directory walk.
+            // Top up the container's photo/video copy. Photos needs no tunnel or
+            // gateway, so this can start as soon as setup is done. It is
+            // rate-limited to one an hour and skips assets already stored
+            // unchanged, so a launch costs a library walk, not a second copy.
             //
             // `isComplete` is the setup guide's gate: a copy that starts while the
             // user is still on the guide is the one case where the stored files
             // precede the explanation of what they are for.
             if FirstRunSettings.shared.isComplete, paired, !identity.version.isEmpty {
-                GoldenNuggetEngine.shared.startAutomaticMediaPull(reason: "app launch")
+                GoldenNuggetEngine.shared.startAutomaticMediaBackup(reason: "app launch")
             }
         }
         .onOpenURL { url in
@@ -488,7 +487,7 @@ struct GoldenNuggetView: View {
                                 disabled: !canRestoreMedia) {
                 restoreMedia()
             }
-            NativeNote("Copied automatically at setup and on every launch; this writes every kept photo and video back to the device's Media folder.")
+            NativeNote("Every apply backs up new and changed media with your photo-library permission; this writes the kept copies back into the photo library.")
             Button {
                 // Asks the shell: a tab on a phone, a push on a tablet.
                 openDestination(.media)
@@ -504,13 +503,19 @@ struct GoldenNuggetView: View {
         paired && !running && !resetting && !restoringMedia && (mediaTotals?.files ?? 0) > 0
     }
 
-    /// Re-read the store's totals off the main actor.
+    /// Re-read both stores' totals off the main actor.
     private func refreshMediaTotals() {
         Task {
-            // `storeTotals()` stats the manifest and decodes it only when the
+            // `storeTotals()` stats each manifest and decodes it only when its
             // store changed, but a first read of a large library is still a
             // decode — never on the page's thread.
-            let totals = await Task.detached { AfcMediaBackup.storeTotals() }.value
+            let totals = await Task.detached { () -> (files: Int, bytes: Int64)? in
+                let afc = AfcMediaBackup.storeTotals()
+                let photos = PhotoMediaBackup.storeTotals()
+                let files = (afc?.files ?? 0) + (photos?.files ?? 0)
+                guard files > 0 else { return nil }
+                return (files, (afc?.bytes ?? 0) + (photos?.bytes ?? 0))
+            }.value
             await MainActor.run {
                 mediaTotals = totals.map { MediaTotals(files: $0.files, bytes: $0.bytes) }
             }
@@ -531,7 +536,7 @@ struct GoldenNuggetView: View {
             var tone: GoldenTone = .primary
             do {
                 try await GoldenNuggetEngine.shared.restoreMedia()
-                text = "Media restored to the device."
+                text = "Media restored to the photo library."
                 tone = .success
             } catch let failure as TransportFailure where failure.isCancellation {
                 text = "⏹ stopped by the user (\(failure.label))"

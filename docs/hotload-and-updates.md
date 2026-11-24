@@ -5,8 +5,8 @@ including the local desktop's `badNews` mandatory-update action. Mobile uses
 its own channels so desktop app-version scopes and packages cannot accidentally
 block or update the iOS app:
 
-- Rules: `https://raw.githubusercontent.com/GoldenNugget-Team/GoldenNugget-mobile/main/hotload_rules.json`
-- Releases: `https://api.github.com/repos/GoldenNugget-Team/GoldenNugget-mobile/releases/latest`
+- Rules: `https://raw.githubusercontent.com/GoldensHQ/GoldenNugget-mobile/main/hotload_rules.json`
+- Releases: `https://api.github.com/repos/GoldensHQ/GoldenNugget-mobile/releases/latest`
 
 The root `hotload_rules.json` ships an empty rule list. Publishing it on `main`
 makes this mobile rules endpoint available. Rules are metadata, never executable
