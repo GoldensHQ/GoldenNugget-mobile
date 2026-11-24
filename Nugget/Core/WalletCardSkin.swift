@@ -36,28 +36,8 @@ struct WalletCard: Identifiable, Hashable, Codable {
 
     var hasImage: Bool { imageData != nil }
 
-    /// Clean an identifier out of a log line, a filename or a paste.
-    ///
-    /// A port of `CardItem.cleanCardId`, and deliberately strict: it returns nil
-    /// for a bare UUID, because the identifiers Passbook logs for "a card was
-    /// added" are sometimes a UUID and sometimes a hash, and a UUID would produce
-    /// a write to a path that does not exist while looking perfectly plausible.
-    static func cleanIdentifier(_ raw: String) -> String? {
-        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        value = value.trimmingCharacters(in: CharacterSet(charactersIn: "'\",()<>;[]{}"))
-        if value.contains("/") {
-            value = (value as NSString).lastPathComponent
-        }
-        for ext in [".pkpass", ".cache", ".pkcache"] where value.hasSuffix(ext) {
-            value = String(value.dropLast(ext.count))
-        }
-        value = value.trimmingCharacters(in: CharacterSet(charactersIn: "'\",()<>;[]{}. "))
-        guard (20...64).contains(value.count), !value.contains("/") else { return nil }
-        if value.count == 36, value.filter({ $0 == "-" }).count == 4 {
-            return nil
-        }
-        return value
-    }
+    /// Identifiers are cleaned and validated in `WalletCardIDs`, which stays
+    /// Foundation-only so the scanner can be checked on a host machine.
 }
 
 /// Turns one image into the set of files a Wallet card is made of.
@@ -167,7 +147,7 @@ enum WalletEngine {
         let total = Double(withImages.count)
         var written = 0
         for (index, card) in withImages.enumerated() {
-            let identifier = WalletCard.cleanIdentifier(card.id) ?? card.id
+            let identifier = WalletCardIDs.cleanIdentifier(card.id) ?? card.id
             log("[\(index + 1)/\(withImages.count)] \(identifier)")
 
             guard let data = card.imageData, let image = UIImage(data: data) else {
@@ -250,53 +230,18 @@ enum WalletEngine {
     /// does not announce itself, Passbook logs it, and the log is a live stream
     /// over the tunnel rather than a file that can be read after the fact. The
     /// caller keeps the stream open while the user brings a card up.
+    ///
+    /// Only `WalletCardIDs` decides what a line means. The syslog stream carries
+    /// every process on the device, so handing arbitrary tokens to the UI is
+    /// what produced a page of empty cards.
     static func scanCards(pairingPath: String,
                           onFound: @escaping @Sendable (String) -> Void) async throws -> () -> Void {
         let stop = try await Airlift.streamSyslog(pairingPath: pairingPath) { line in
-            for candidate in identifiers(in: line) {
+            for candidate in WalletCardIDs.identifiers(in: line) {
                 onFound(candidate)
             }
         }
         return stop
-    }
-
-    /// Every plausible card identifier in one log line.
-    ///
-    /// Passbook's wording differs per iOS version, so this matches on the
-    /// `Passes/Cards/<id>.pkpass` path and on bare quoted tokens, and hands both
-    /// to `cleanIdentifier` rather than trying to know the sentence.
-    static func identifiers(in line: String) -> [String] {
-        var found: [String] = []
-
-        if let cardsRange = line.range(of: "Passes/Cards/") {
-            let tail = line[cardsRange.upperBound...]
-            let end = tail.firstIndex { $0 == "/" || $0 == " " || $0 == "\"" || $0 == "'" }
-            let token = String(tail[..<(end ?? tail.endIndex)])
-            if let cleaned = WalletCard.cleanIdentifier(token) { found.append(cleaned) }
-        }
-
-        for raw in quoted(in: line) {
-            if let cleaned = WalletCard.cleanIdentifier(raw) { found.append(cleaned) }
-        }
-
-        var seen = Set<String>()
-        return found.filter { seen.insert($0).inserted }
-    }
-
-    private static func quoted(in line: String) -> [String] {
-        var tokens: [String] = []
-        var current = ""
-        var inside = false
-        for character in line {
-            if character == "\"" || character == "'" {
-                if inside, !current.isEmpty { tokens.append(current) }
-                current = ""
-                inside.toggle()
-            } else if inside {
-                current.append(character)
-            }
-        }
-        return tokens
     }
 }
 
@@ -312,6 +257,10 @@ enum WalletEngine {
 /// identified by a string Passbook logged once, and if the app is relaunched
 /// without the card against the reader there is no way to rediscover it. Keeping
 /// the identifier is what lets the apply run unattended later.
+///
+/// Loading filters identifiers through `WalletCardIDs`: a store written by an
+/// older build contains the quoted-token junk the old scanner invented, and
+/// those blank cards must not survive into the fixed version.
 enum WalletCardStore {
     private static var url: URL {
         URL.documents.appendingPathComponent("wallet-cards.json")
@@ -322,7 +271,7 @@ enum WalletCardStore {
               let decoded = try? JSONDecoder().decode([WalletCard].self, from: data) else {
             return []
         }
-        return decoded
+        return decoded.filter { WalletCardIDs.isValidIdentifier($0.id) }
     }
 
     static func save(_ cards: [WalletCard]) {

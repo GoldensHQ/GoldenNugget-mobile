@@ -25,6 +25,14 @@ struct WalletView: View {
     @State private var running = false
     @State private var scanning = false
     @State private var stopScan: (() -> Void)?
+    /// A scan can be stopped before the stream handle exists. The generation is
+    /// checked by the callback so a late line cannot add a card after Stop, and
+    /// the returned handle is called immediately if the scan was stopped while
+    /// it was starting.
+    @State private var scanGeneration = 0
+    /// New cards arrive in bursts. One debounced write replaces a full encode
+    /// of every card (skins included) for each line of syslog.
+    @State private var saveTask: Task<Void, Never>?
     /// The picker's delegate, held here.
     ///
     /// `UIImagePickerController.delegate` is a weak reference, and the controller
@@ -132,7 +140,13 @@ struct WalletView: View {
             // and a stored skin is kept for a card that is found again.
             cards = WalletCardStore.load()
         }
-        .onDisappear { stopScan?(); stopScan = nil; scanning = false }
+        .onDisappear {
+            scanGeneration &+= 1
+            stopScan?()
+            stopScan = nil
+            scanning = false
+            flushSave()
+        }
     }
 
     private var blocker: String {
@@ -266,11 +280,14 @@ struct WalletView: View {
     // MARK: - Cards
 
     private var cardsList: some View {
-        VStack(spacing: 16) {
-            ForEach(cards) { card in
+        // Lazy: a bad scan used to add dozens of rows, each a full-size card
+        // artwork with gradient and shadow, all built eagerly on every hit.
+        LazyVStack(spacing: 16) {
+            ForEach(cards.indices, id: \.self) { index in
+                let card = cards[index]
                 WalletCardRow(
                     card: card,
-                    index: cards.firstIndex(where: { $0.id == card.id }) ?? 0,
+                    index: index,
                     onToggleSelected: { toggleSelected(card.id, $0) },
                     onPickImage: { pickImage(for: card.id) },
                     onClearImage: { clearImage(card.id) },
@@ -340,12 +357,15 @@ struct WalletView: View {
 
     private func toggleScan() {
         if scanning {
+            scanGeneration &+= 1
             stopScan?()
             stopScan = nil
             scanning = false
+            flushSave()
             return
         }
         scanning = true
+        let generation = scanGeneration
         log = []
         status = "Listening. Hold a card against the reader."
         tone = .secondary
@@ -357,9 +377,17 @@ struct WalletView: View {
                 let stop = try await WalletEngine.scanCards(
                     pairingPath: AppPaths.pairingFile.path
                 ) { identifier in
-                    Task { @MainActor in self.add(identifier) }
+                    Task { @MainActor in
+                        guard self.scanning, self.scanGeneration == generation else { return }
+                        self.add(identifier)
+                    }
                 }
-                stopScan = stop
+                if generation == scanGeneration {
+                    stopScan = stop
+                } else {
+                    // Stop was tapped while the stream was still starting.
+                    stop()
+                }
             } catch {
                 scanning = false
                 status = error.localizedDescription
@@ -368,12 +396,34 @@ struct WalletView: View {
         }
     }
 
-    private func add(_ identifier: String) {
+    private func add(_ rawIdentifier: String) {
+        guard let identifier = WalletCardIDs.cleanIdentifier(rawIdentifier) else { return }
         guard !cards.contains(where: { $0.id == identifier }) else { return }
         cards.append(WalletCard(id: identifier))
-        WalletCardStore.save(cards)
+        scheduleSave()
         status = "Found \(identifier.prefix(10))…"
         tone = .primary
+    }
+
+    /// Coalesce the scan's burst of writes. Saving re-encodes every card,
+    /// including any multi-megabyte skins already assigned, so doing it once
+    /// per syslog line is enough to stall the main thread on its own.
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            WalletCardStore.save(cards)
+            saveTask = nil
+        }
+    }
+
+    /// Never leave a scan's finds unsaved when the page goes away mid-debounce.
+    private func flushSave() {
+        guard let saveTask else { return }
+        saveTask.cancel()
+        self.saveTask = nil
+        WalletCardStore.save(cards)
     }
 
     // MARK: - Apply
