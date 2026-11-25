@@ -48,6 +48,30 @@
           }
         }
       }
+    },
+    "NSLocationAlwaysAndWhenInUseUsageDescription" : {
+      "comment" : "Why Always location is requested. Shown in Settings > Privacy & Security > Location Services.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoldenNugget uses background location events to keep a tweak apply running after you leave the app. Your location is not stored or sent anywhere."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "Why location is used while the app is active. Shown in Settings > Privacy & Security > Location Services.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GoldenNugget uses background location events only to keep a tweak apply running after you leave the app. Your location is not stored or sent anywhere."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

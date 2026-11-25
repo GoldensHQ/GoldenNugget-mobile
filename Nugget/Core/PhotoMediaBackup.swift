@@ -55,6 +55,12 @@ enum PhotoMediaBackup {
         var isVideo: Bool
     }
 
+    /// The library knows the asset but its bytes are still in iCloud. Photos
+    /// reports this as `PHPhotosError.networkAccessRequired` (3164) when an
+    /// export forbids network access. Backup treats it as a skip, not a failed
+    /// copy: nothing was written, so any older verified copy stays untouched.
+    struct AssetRequiresNetwork: Error {}
+
     /// The device-side half, kept small enough to double in tests.
     protocol Service: Sendable {
         func authorizeForBackup() async throws
@@ -134,6 +140,7 @@ enum PhotoMediaBackup {
 
         var added = 0
         var alreadyStored = 0
+        var skippedCloudOnly = 0
         var bytes: Int64 = 0
 
         for asset in library {
@@ -179,6 +186,14 @@ enum PhotoMediaBackup {
                     throw GoldenNuggetError("Photos: \(asset.filename) changed size while exporting — original kept.")
                 }
                 try handle(at: partial, synchronize: true)
+            } catch is AssetRequiresNetwork {
+                // The asset exists but its bytes are in iCloud. This backup
+                // never downloads originals, so leave the library alone and
+                // keep any older verified copy exactly as it was.
+                try? FileManager.default.removeItem(at: partial)
+                skippedCloudOnly += 1
+                onProgress("Photos: \(asset.filename) is in iCloud only — skipped, original kept")
+                continue
             } catch {
                 try? FileManager.default.removeItem(at: partial)
                 throw GoldenNuggetError("Photos: \(asset.filename) failed — \(error.localizedDescription). Original kept.")
@@ -215,6 +230,11 @@ enum PhotoMediaBackup {
         try write(manifest)
         onProgress("Photos: \(added) new or changed asset(s), "
             + "\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)) in the store")
+        if skippedCloudOnly > 0 {
+            onProgress("Photos: \(skippedCloudOnly) iCloud-only asset(s) skipped, no network download — "
+                + "originals kept; open them in Photos or switch Settings › Photos to Download and Keep "
+                + "Originals, then back up again")
+        }
         return manifest
     }
 

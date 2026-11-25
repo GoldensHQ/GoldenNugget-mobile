@@ -16,7 +16,9 @@ import ZIPFoundation
 ///  * **Costs** — iOS 26.2+, an unlocked device, and a store reset cannot be
 ///    expressed: this path can add a descriptor, not remove one.
 ///
-/// AirLift is the default; protective backup also supports store resets.
+/// Deprecated for PosterBoard: the mode is still functional but no longer the
+/// default, and the page labels it as such. Protective backup is the supported
+/// path and is the only one that supports store resets.
 enum PosterBoardAirlift {
     /// The bundle whose container holds the store.
     static let bundleID = "com.apple.PosterBoard"

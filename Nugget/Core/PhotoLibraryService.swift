@@ -10,6 +10,9 @@ import UniformTypeIdentifiers
 /// tree, a pairing file or the tunnel. Assets are streamed to disk with
 /// `PHAssetResourceManager`, so a large video never has to sit in one `Data`,
 /// and restored by `PHAssetCreationRequest` so the library owns the result.
+/// Assets whose bytes are still in iCloud are reported as
+/// `PhotoMediaBackup.AssetRequiresNetwork`, which makes the backup skip them
+/// instead of turning a media copy into a download.
 ///
 /// `@preconcurrency` keeps Swift 5-mode builds quiet about Photos' completion
 /// handlers while the code still marshals every continuation resume explicitly.
@@ -81,13 +84,26 @@ final class PhotoLibraryService: PhotoMediaBackup.Service, @unchecked Sendable {
                 completionHandler: { error in
                     if let error {
                         sink.closeQuietly()
-                        continuation.resume(throwing: error)
+                        if Self.isNetworkAccessRequired(error) {
+                            continuation.resume(throwing: PhotoMediaBackup.AssetRequiresNetwork())
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
                     } else {
                         continuation.resume()
                     }
                 })
         }
         return try sink.finish()
+    }
+
+    /// Photos reports code 3164 when the requested bytes are only in iCloud
+    /// and the request did not allow network access. Other Photos errors still
+    /// travel to the caller unchanged and fail the backup.
+    private static func isNetworkAccessRequired(_ error: Error) -> Bool {
+        let photosError = error as NSError
+        return photosError.domain == PHPhotosErrorDomain
+            && photosError.code == PHPhotosError.Code.networkAccessRequired.rawValue
     }
 
     private static func primaryResource(for asset: PHAsset) -> PHAssetResource? {

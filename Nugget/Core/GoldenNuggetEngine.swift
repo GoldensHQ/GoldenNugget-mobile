@@ -241,29 +241,45 @@ class GoldenNuggetEngine {
         communityPayloads: [TweakPayload] = [],
         communityPresetEntry: [String: Any]? = nil
     ) async throws {
-        // `_prepare_rollback_preset` (`main_window_mixins.py:1090`): keep the
-        // last successful apply available as a one-click rollback *before* the
-        // next apply overwrites it.  Best-effort, like the reference.
-        try await loggedRun("apply") {
-            GoldenNuggetPresets.prepareRollback()
-            try await applyTweaksRun(selection: selection,
-                                     posterBoard: posterBoard,
-                                     statusBar: statusBar,
-                                     templates: templates,
-                                     deviceVersion: deviceVersion,
-                                     isIPhone: isIPhone, deviceModel: deviceModel, communityPayloads: communityPayloads)
+        // The keepalive covers the whole call: the rollback snapshot before the
+        // device is touched, the restore itself, and the preset save after it.
+        // It is claimed before `loggedRun` reserves the run so an overlapping
+        // apply rejected by `InFlightCall` cannot leave this run's screen awake
+        // without an owner. `start()` refuses the run when the Always-location
+        // requirement is on but unmet — the home page preflights the same rule
+        // before showing its confirmation, but the engine is the last guard.
+        let keepAliveToken = try await MainActor.run {
+            try ApplyKeepAlive.shared.start()
         }
-        // `_save_last_applied_preset` (`main_window_mixins.py:1101`): a run
-        // that returned is a successful apply — it becomes the rollback source
-        // for the next one.  The model string is derived because the engine
-        // does not carry a full identity; the snapshot is internal metadata.
-        _ = GoldenNuggetPresets.saveLastApplied(selection: selection,
-                                                deviceModel: deviceModel.isEmpty ? (isIPhone ? "iPhone" : "iPad") : deviceModel,
-                                                iosVersion: deviceVersion)
-        if let entry = communityPresetEntry {
-            do { try GoldenNuggetPresets.attachTemplates(entry, to: GoldenNuggetPresets.lastAppliedName) }
-            catch { log("Template rollback snapshot could not be saved: \(error.localizedDescription)") }
+        do {
+            // `_prepare_rollback_preset` (`main_window_mixins.py:1090`): keep the
+            // last successful apply available as a one-click rollback *before* the
+            // next apply overwrites it.  Best-effort, like the reference.
+            try await loggedRun("apply") {
+                GoldenNuggetPresets.prepareRollback()
+                try await applyTweaksRun(selection: selection,
+                                         posterBoard: posterBoard,
+                                         statusBar: statusBar,
+                                         templates: templates,
+                                         deviceVersion: deviceVersion,
+                                         isIPhone: isIPhone, deviceModel: deviceModel, communityPayloads: communityPayloads)
+            }
+            // `_save_last_applied_preset` (`main_window_mixins.py:1101`): a run
+            // that returned is a successful apply — it becomes the rollback source
+            // for the next one.  The model string is derived because the engine
+            // does not carry a full identity; the snapshot is internal metadata.
+            _ = GoldenNuggetPresets.saveLastApplied(selection: selection,
+                                                    deviceModel: deviceModel.isEmpty ? (isIPhone ? "iPhone" : "iPad") : deviceModel,
+                                                    iosVersion: deviceVersion)
+            if let entry = communityPresetEntry {
+                do { try GoldenNuggetPresets.attachTemplates(entry, to: GoldenNuggetPresets.lastAppliedName) }
+                catch { log("Template rollback snapshot could not be saved: \(error.localizedDescription)") }
+            }
+        } catch {
+            await MainActor.run { ApplyKeepAlive.shared.finish(token: keepAliveToken) }
+            throw error
         }
+        await MainActor.run { ApplyKeepAlive.shared.finish(token: keepAliveToken) }
     }
 
     private func applyTweaksRun(
@@ -276,7 +292,7 @@ class GoldenNuggetEngine {
         deviceModel: String = "",
         communityPayloads: [TweakPayload] = []
     ) async throws {
-        AppLog.shared.memory.reset()
+        AppLog.shared.resetForNewRun()
         clearCancel()
         clearProgress()
         let runStage = StageTimer("RUN apply")
@@ -645,6 +661,7 @@ class GoldenNuggetEngine {
     private func applyPosterBoardOverAirlift(selection: PosterBoardSelection,
                                              templates: [TemplateFile] = [],
                                              deviceVersion: String) async throws {
+        log("⚠️ PosterBoard AirLift is deprecated; Protective backup is the supported path.")
         try await PosterBoardAirlift.apply(
             selection: selection,
             templates: templates,
@@ -672,7 +689,7 @@ class GoldenNuggetEngine {
     }
 
     private func fetchPosterBoardDatabaseRun() async throws {
-        AppLog.shared.memory.reset()
+        AppLog.shared.resetForNewRun()
         clearCancel()
         clearProgress()
         let stage = StageTimer("RUN posterboard database fetch")
@@ -711,7 +728,7 @@ class GoldenNuggetEngine {
 
     private func applyPosterBoardViaAirliftRun(_ selection: PosterBoardSelection,
                                                deviceVersion: String) async throws {
-        AppLog.shared.memory.reset()
+        AppLog.shared.resetForNewRun()
         clearCancel()
         clearProgress()
         let stage = StageTimer("RUN posterboard airlift apply")
@@ -871,7 +888,7 @@ class GoldenNuggetEngine {
 
     private func resetPagesRun(pages: Set<ResetPage>) async throws {
         try await HotLoadService.requireAllowed(features: Set(pages.map(\.title)))
-        AppLog.shared.memory.reset()
+        AppLog.shared.resetForNewRun()
         clearCancel()
         clearProgress()
         let runStage = StageTimer("RUN page reset")

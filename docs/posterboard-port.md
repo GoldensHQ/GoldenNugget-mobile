@@ -54,6 +54,12 @@ Every payload still lands in `AppDomain-com.apple.PosterBoard`, through the exis
 app-container PoC and the footnote's sibling rows), and its row shape was already measured
 in `TweakRowProfile`. PosterBoard introduced no new row shape.
 
+The later AirLift container-write mode is an exception to this channel and is now
+**deprecated for PosterBoard**. It stays functional so existing selections do not
+change under a user, but new installs default to protective backup, the mode picker
+labels it, and the run log warns when it is used. Protective backup is the supported
+path and the only one that can express a store reset.
+
 Inside **the one apply** (the reference's `_apply_tweak_pass` shape: one pass, one button,
 with `needs_posterboard` deciding whether the extra stage runs at all):
 

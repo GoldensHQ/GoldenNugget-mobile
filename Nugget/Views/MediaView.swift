@@ -137,8 +137,10 @@ struct MediaView: View {
     private var surveyRows: some View {
         if let survey {
             VStack(alignment: .leading, spacing: 4) {
-                (Text("\(survey.files.count) file(s), \(bytes(survey.bytes))")
-                    + (survey.skippedSymlinks > 0 ? Text(", \(survey.skippedSymlinks) symlink(s) skipped") : Text(verbatim: "")))
+                Text(String(localized: "\(survey.files.count) file(s), \(bytes(survey.bytes))")
+                    + (survey.skippedSymlinks > 0
+                       ? String(localized: ", \(survey.skippedSymlinks) symlink(s) skipped")
+                       : ""))
                     .font(.body)
                 NativeNote("Free in the container: \(bytes(free)).")
             }

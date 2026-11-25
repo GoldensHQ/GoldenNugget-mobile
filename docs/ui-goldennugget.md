@@ -109,11 +109,12 @@ Both steps require touching the Resources section of `.pbxproj` and can only be 
 
 - Main page: pairing select/reset, `.app/.ipa` selection and reading the bundleID, the bundle/file/contents fields,
   Run/Stop, the `ALTPairingFile` bootstrap, `onOpenURL`, the two alerts, the four diagnostics + share, the 600-line log cap,
-  ~~the `UIDocumentPickerViewController` swizzle in `init()`~~ — deleted on 2026-09-26: the
-  `fix_initForOpeningContentTypes:asCopy:` it looks up **is not defined anywhere in the whole repo**
-  (this is the only lookup site), so `class_getInstanceMethod` always returns nil and the swap never
-  happened; and as a custom `init()` it also overrides the memberwise construction, which is one of the
-  two root causes of the compile errors this time.
+  ~~the `UIDocumentPickerViewController` swizzle in `init()`~~ — deleted on 2026-09-26 and **not
+  restored here**: the `fix_initForOpeningContentTypes:asCopy:` it looked up was not defined anywhere
+  in the repo, so `class_getInstanceMethod` always returned nil, and as a custom `init()` it also
+  overrode the memberwise construction. The working replacement is the self-contained
+  `Nugget/Core/FilePickerSigningFix.swift`, installed from `GoldenNuggetApp.init()`; it keeps this
+  view's memberwise initializer intact.
 - Tweaks page: `DeviceIdentity.read()`, compatibility filtering (incompatible ones are not shown), the
   `(on/total)` of the three sections, the switch/text/number editors (the number editor still carries
   draft + clamping + `numberHint`), the `autosave.json` import and its four kinds of report,

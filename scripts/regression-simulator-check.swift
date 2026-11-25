@@ -221,6 +221,49 @@ final class RegressionSuite {
             self.check(try PhotoMediaBackup.read().entries.count == 2,
                        "both assets are in the native manifest")
         }
+        await run("iCloud-only assets are skipped without stopping the backup") {
+            _ = try self.resetStore("photos-cloud-only")
+            self.fakePhotos.library = [.init(identifier: "C1", filename: "cloud.PNG",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             data: Data([9]), cloudOnly: true),
+                                       .init(identifier: "L1", filename: "local.jpg",
+                                             created: Date(timeIntervalSince1970: 110),
+                                             modified: Date(timeIntervalSince1970: 210),
+                                             data: Data([1, 2, 3]))]
+            let lines = LogLines()
+            let manifest = try await PhotoMediaBackup.backup { lines.append($0) }
+            self.check(manifest.entries.map(\.identifier) == ["L1"],
+                       "cloud-only asset is not journaled as a stored copy")
+            self.check(self.fakePhotos.exportCounts["C1"] == nil,
+                       "cloud-only asset is not exported")
+            self.check(self.fakePhotos.exportCounts["L1"] == 1,
+                       "a local asset after the skipped one is still backed up")
+            self.check(try Data(contentsOf: AppPaths.mediaStore
+                .appendingPathComponent("Photos/L1/local.jpg")) == Data([1, 2, 3]),
+                "the local copy is verified and stored")
+            self.check(lines.all.contains { $0.contains("cloud.PNG") && $0.contains("iCloud") },
+                       "the skip is reported with the filename")
+        }
+        await run("cloud-only asset keeps its older verified copy") {
+            _ = try self.resetStore("photos-cloud-stale")
+            self.fakePhotos.library = [.init(identifier: "C1", filename: "cloud.PNG",
+                                             created: Date(timeIntervalSince1970: 100),
+                                             modified: Date(timeIntervalSince1970: 200),
+                                             data: Data([1, 2, 3]))]
+            _ = try await PhotoMediaBackup.backup { _ in }
+            self.fakePhotos.library[0].cloudOnly = true
+            self.fakePhotos.library[0].modified = Date(timeIntervalSince1970: 300)
+            let manifest = try await PhotoMediaBackup.backup { _ in }
+            self.check(manifest.entries.count == 1, "a cloud-only asset does not duplicate its row")
+            self.check(manifest.entries[0].modified == Date(timeIntervalSince1970: 200),
+                       "an unavailable update does not replace the verified copy's date")
+            self.check(try Data(contentsOf: AppPaths.mediaStore
+                .appendingPathComponent("Photos/C1/cloud.PNG")) == Data([1, 2, 3]),
+                "the older verified copy stays intact")
+            self.check(self.fakePhotos.exportCounts["C1"] == 1,
+                       "a cloud-only re-export is not attempted")
+        }
         await run("native restore writes stored copies into the library") {
             _ = try self.resetStore("photos-restore")
             self.fakePhotos.library = [.init(identifier: "R1", filename: "holiday.mov",

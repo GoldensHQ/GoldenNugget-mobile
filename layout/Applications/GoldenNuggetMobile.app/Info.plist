@@ -63,6 +63,10 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>GoldenNugget publishes an iOS 27 wireless pairing service on the local network so this iPhone can pair with itself and generate its own pairing file without a computer.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>GoldenNugget uses background location events to keep a tweak apply running after you leave the app. Your location is not stored or sent anywhere.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GoldenNugget uses background location events only to keep a tweak apply running after you leave the app. Your location is not stored or sent anywhere.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>GoldenNugget restores your backed-up photos and videos into the photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -76,6 +80,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>

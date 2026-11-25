@@ -32,6 +32,22 @@ sources.
   and as the Media page's way to delete originals, which Photos cannot do.
   Added `NSPhotoLibraryUsageDescription` and
   `NSPhotoLibraryAddUsageDescription`.
+- The built-in file picker now works on sideloaded installs whose certificate
+  application ID does not match the app's bundle ID (paid certs, Esign, Ksign,
+  Feather). A launch-time compatibility hook gives UIKit the signed host
+  identity and copies the selected file into the app container, instead of
+  leaving the system sheet open with nothing selectable. Correctly signed
+  installs keep the stock picker behaviour.
+- PosterBoard's AirLift mode is now marked deprecated. It remains functional and
+  existing selections are still honoured, but new installs default to Protective
+  backup, the picker labels AirLift as deprecated, and every AirLift PosterBoard
+  run logs a warning. Wallet and Passcode AirLift are unaffected.
+- Apply logs are concise by default. Per-file photo/AFC progress, backup
+  placeholders and commits, wait observations, AirLift callbacks, and repeated
+  diagnostics/Rust excerpts are coalesced in `goldennugget.log` and the in-app
+  run log, so a failure stays visible; errors, verdicts, stage totals, and the
+  parser's count lines are unchanged. The full stream remains on the device
+  console.
 - `scripts/build-ipa-xtool.sh --clean` passes with Swift 6.4.2 and xtool 1.24.0,
   producing `xtool/GoldenNuggetMobile.ipa` (16.4 MB, unsigned). The `xcrun`
   gates remain unavailable on Linux.

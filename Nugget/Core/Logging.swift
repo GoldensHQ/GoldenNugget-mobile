@@ -96,6 +96,169 @@ final class MemoryLogSink: LogSink, @unchecked Sendable {
     }
 }
 
+/// One coalescing rule for a known family of detail lines.
+private struct AppLogFamilyRule {
+    let label: String
+    /// Keep the first line of a family, then one in every `cadence` lines, so a
+    /// long run still shows that the family is moving without listing every file.
+    let cadence: Int
+    /// Emit one counted marker after this many lines were actually omitted.
+    let summaryEvery: Int
+}
+
+/// The concise-log policy for `goldennugget.log` and the in-app run log.
+///
+/// Apply used to produce thousands of nearly identical lines — one per photo,
+/// one per AFC file, one per backup placeholder, one per AirLift callback, plus
+/// a fresh diagnostics dump on every retry. They are useful in the device
+/// console, but in the app they push the single actionable line ("apply failed:
+/// …") off the screen and fill the 2 MiB file before the failure is written.
+///
+/// This filter sits at the fan-out point rather than at the call sites: the 98
+/// `AppLog.write` callers keep their exact wording, the scripts that grep the
+/// file keep their anchors, and the raw stream stays on the console via the
+/// unfiltered `print` in `AppLog.log`. Only families that are known to be
+/// high-volume are coalesced; anything unrecognised passes through verbatim.
+private final class AppLogConciseFilter: @unchecked Sendable {
+    private struct State {
+        var seen = 0
+        var lastEmit = 0
+        var lastSummary = 0
+    }
+
+    private static let rules: [String: AppLogFamilyRule] = [
+        "photos.files": .init(label: "Photos file", cadence: 10, summaryEvery: 50),
+        "afc.files": .init(label: "AFC media file", cadence: 10, summaryEvery: 50),
+        "backup.progress": .init(label: "backup progress", cadence: 4, summaryEvery: 20),
+        "restore.progress": .init(label: "restore progress", cadence: 4, summaryEvery: 20),
+        "wait": .init(label: "wait observation", cadence: 3, summaryEvery: 20),
+        "placeholder": .init(label: "placeholder", cadence: 20, summaryEvery: 100),
+        "commit": .init(label: "commit", cadence: 20, summaryEvery: 100),
+        "airlift": .init(label: "AirLift library", cadence: 20, summaryEvery: 100),
+        // A diagnostics block or Rust excerpt is a multi-line snapshot. The
+        // first one in a run is kept; repeating it on every retry is what made
+        // apply failures unreadable.
+        "diagnostics": .init(label: "diagnostics block", cadence: Int.max, summaryEvery: Int.max),
+        "rust.excerpt": .init(label: "Rust excerpt", cadence: Int.max, summaryEvery: Int.max),
+    ]
+
+    private let lock = NSLock()
+    private var states: [String: State] = [:]
+
+    func reset() {
+        lock.lock()
+        states.removeAll()
+        lock.unlock()
+    }
+
+    /// Returns the line to fan out, or `nil` when this occurrence was folded
+    /// into a counted marker. `forcedFamily` is used by callers that know a
+    /// line came from a high-volume trampoline (AirLift) but whose text has no
+    /// stable prefix of its own.
+    func emittedLine(for raw: String, forcedFamily: String?) -> String? {
+        let family = forcedFamily ?? Self.family(for: raw)
+        // Snapshots are identified as a family before the error markers they
+        // contain: a diagnostics block almost always mentions "failed", but a
+        // retry must not append a second copy of it to the app log.
+        if let family, family != "diagnostics", family != "rust.excerpt",
+           Self.isImportant(raw) { return raw }
+        guard let family else { return raw }
+        let rule = Self.rules[family]
+            ?? AppLogFamilyRule(label: family, cadence: 20, summaryEvery: 100)
+
+        lock.lock()
+        defer { lock.unlock() }
+        var state = states[family] ?? State()
+        state.seen += 1
+
+        if state.seen == 1 || state.seen - state.lastEmit >= rule.cadence {
+            state.lastEmit = state.seen
+            states[family] = state
+            return raw
+        }
+
+        let omitted = state.seen - state.lastSummary
+        guard omitted >= rule.summaryEvery else {
+            states[family] = state
+            return nil
+        }
+        state.lastSummary = state.seen
+        states[family] = state
+        return "… \(omitted) \(rule.label) detail line\(omitted == 1 ? "" : "s") omitted; "
+            + "full text is on the console …"
+    }
+
+    /// Lines that must never be coalesced, even when they share a prefix with
+    /// a detail family. These are the lines an apply failure is read for.
+    private static func isImportant(_ raw: String) -> Bool {
+        if raw.contains("⚠️") || raw.contains("❌") { return true }
+        let lower = raw.lowercased()
+        for marker in ["failed", "fatal", "refused", "aborted", "giving up",
+                       "not retrying", "crash", "panic", "FilePickerFix:"] {
+            if lower.contains(marker.lowercased()) { return true }
+        }
+        if raw.hasPrefix("⏱ RUN ") { return true }
+        for marker in ["apply succeeded", "reset succeeded", "restore verified",
+                       "restore confirmed complete"] {
+            if lower.contains(marker) { return true }
+        }
+        return false
+    }
+
+    /// Recognise only the families that actually flood an apply. Everything
+    /// else — warnings, payload lists, stage totals, one-off state — is kept.
+    private static func family(for raw: String) -> String? {
+        if raw.contains("── diagnostics ──") { return "diagnostics" }
+        if raw.contains("rust log excerpt") || raw.hasPrefix("Rust log tail,") { return "rust.excerpt" }
+
+        if raw.hasPrefix("Photos: ") {
+            // The count and summary lines are the anchors the cost report uses.
+            // A per-file line is the one with a filename followed by an em dash.
+            if raw.contains("asset(s) in the photo library")
+                || raw.contains("new or changed asset(s)")
+                || raw.contains("asset(s) already stored")
+                || raw.contains("iCloud-only asset(s) skipped")
+                || raw.contains("file(s) in the store")
+                || raw.hasPrefix("Photos: restoring ")
+                || raw.contains("restore finished") { return nil }
+            if raw.contains(" — ") { return "photos.files" }
+        }
+
+        if raw.hasPrefix("AFC media: ") {
+            if raw.contains("file(s) already stored")
+                || raw.contains("file(s),")
+                || raw.contains("optional backup requested")
+                || raw.contains("nothing in")
+                || (raw.contains("stored ") && raw.contains("removed ")) { return nil }
+            if raw.contains(" — ") || raw.contains("could not remove")
+                || raw.contains("could not re-check")
+                || raw.contains("changed during transfer") { return "afc.files" }
+        }
+
+        if raw.hasPrefix("backup stream:") { return "backup.progress" }
+        if raw.hasPrefix("restore progress:") { return "restore.progress" }
+
+        if raw.hasPrefix("⏱ ") && !raw.hasPrefix("⏱ RUN ") {
+            // Plain stage timings are kept. Only the repeating observations —
+            // heartbeats and stall notices — are coalesced.
+            if raw.contains("elapsed —") || raw.contains("has not sent")
+                || raw.contains("answered the handshake")
+                || raw.contains("device is talking again")
+                || raw.contains("nothing for") || raw.contains("still quiet") {
+                return "wait"
+            }
+        }
+
+        if raw.hasPrefix("placeholder: #") || raw.hasPrefix("placeholder: cannot create") {
+            return "placeholder"
+        }
+        if raw.hasPrefix("commit: ") && !raw.contains("file(s) moved into place") {
+            return "commit"
+        }
+        return nil
+    }
+}
+
 /// Process-wide log fan-out: one `log()` call, N sinks, in order.
 ///
 /// The sinks are installed by this type itself rather than by an owner, because
@@ -107,6 +270,7 @@ final class AppLog: @unchecked Sendable {
     let memory = MemoryLogSink()
     let file = RotatingFileSink(url: AppPaths.appLog)
 
+    private let conciseFilter = AppLogConciseFilter()
     private let lock = NSLock()
     private var extraSinks: [LogSink] = []
     /// Only ever invoked on the main queue, which is what makes storing a
@@ -131,24 +295,44 @@ final class AppLog: @unchecked Sendable {
         lock.unlock()
     }
 
-    func log(_ line: String) {
-        // Console first: if a sink below throws or a lock is held by a wedged
-        // thread, the line still reaches the device console.
+    /// Start a fresh apply/reset display. The memory list is cleared by the
+    /// engine at each run entry; the coalescing counters have to clear with it,
+    /// or the first per-file line of the next run would be folded into the
+    /// previous run's summary.
+    func resetForNewRun() {
+        conciseFilter.reset()
+        memory.reset()
+    }
+
+    func log(_ line: String, family: String? = nil) {
+        // Console first, and unfiltered: a bug report may need the full detail
+        // even though the file and the in-app tail are deliberately concise.
         print(line)
+        guard let emitted = conciseFilter.emittedLine(for: line, forcedFamily: family) else {
+            return
+        }
         lock.lock()
-        memory.write(line)
-        file.write(line)
-        for sink in extraSinks { sink.write(line) }
+        memory.write(emitted)
+        file.write(emitted)
+        for sink in extraSinks { sink.write(emitted) }
         let handler = uiHandler
         lock.unlock()
         guard let handler else { return }
-        DispatchQueue.main.async { handler(line) }
+        DispatchQueue.main.async { handler(emitted) }
     }
 }
 
 extension AppLog {
     /// Convenience for the many call sites that only want to emit a line.
     static func write(_ line: String) { shared.log(line) }
+
+    /// A line from a known high-volume trampoline whose text has no stable
+    /// prefix. Used by the AirLift C callback, which forwards library output
+    /// verbatim; errors still pass through `isImportant` before this family is
+    /// applied.
+    static func writeDetail(_ line: String, family: String) {
+        shared.log(line, family: family)
+    }
 }
 
 /// Old releases wrote complete pairing dictionaries into diagnostic files.

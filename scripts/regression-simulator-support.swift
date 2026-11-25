@@ -132,6 +132,25 @@ enum AirliftPairing {
     }
 }
 
+/// Progress lines are produced on a Photos worker in the shipping build, so
+/// the double hands them to a locked box rather than a captured local `var`.
+final class LogLines: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String] = []
+
+    func append(_ line: String) {
+        lock.lock()
+        values.append(line)
+        lock.unlock()
+    }
+
+    var all: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+}
+
 /// Hardware double for the Photos framework. It records exports and restores
 /// instead of touching a real library, so the native backup/restore store logic
 /// can be exercised on a simulator without a permission prompt.
@@ -143,6 +162,8 @@ final class FakePhotosService: PhotoMediaBackup.Service, @unchecked Sendable {
         var modified: Date?
         var isVideo: Bool = false
         var data: Data
+        /// Simulates an iCloud-only asset whose bytes are not on the device.
+        var cloudOnly: Bool = false
     }
 
     var library: [Asset] = []
@@ -170,6 +191,7 @@ final class FakePhotosService: PhotoMediaBackup.Service, @unchecked Sendable {
         guard let match = library.first(where: { $0.identifier == asset.identifier }) else {
             throw GoldenNuggetError("Photos: asset not in library")
         }
+        if match.cloudOnly { throw PhotoMediaBackup.AssetRequiresNetwork() }
         exportCounts[asset.identifier, default: 0] += 1
         try match.data.write(to: destination)
         return Int64(match.data.count)

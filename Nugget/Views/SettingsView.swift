@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 import Minimuxer
 
@@ -68,6 +69,7 @@ struct SettingsView: View {
             HotLoadSettingsSection()
             creditsSection
             setupSection
+            BackgroundKeepaliveSection()
             logsSection
             applySection
             historySection
@@ -468,5 +470,61 @@ struct SettingsView: View {
 
     private static var versionText: String {
         "\(info("CFBundleShortVersionString")) (\(info("CFBundleVersion")))"
+    }
+}
+
+/// The permission behind the apply keepalive, and the opt-out for it.
+///
+/// The screen and the short UIKit background task are always held during a
+/// run. This section only governs the longer-lived mechanism: by default an
+/// apply refuses to start until location access is Always, so the restore can
+/// continue after the user leaves the app. The toggle turns that requirement
+/// off for a device where Always cannot be granted; the status row and buttons
+/// explain and request the permission either way.
+struct BackgroundKeepaliveSection: View {
+    @ObservedObject private var keepAlive = ApplyKeepAlive.shared
+
+    var body: some View {
+        Section("Background keepalive") {
+            Text("While a run is applying, GoldenNugget keeps the screen awake and holds a background task so the restore can finish after you leave the app.")
+
+            Toggle(isOn: Binding(get: { keepAlive.requireAlways },
+                                 set: { keepAlive.setRequireAlways($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Require Always Location for apply")
+                    NativeNote("On by default. Apply is refused until location access is Always, so the run can continue in the background. Turn this off to apply without it; the screen and a short background task still keep the run alive.")
+                }
+            }
+
+            LabeledContent("Location access", value: locationStatus)
+            Text("GoldenNugget uses Always location events to keep the apply running after you leave the app. Your location is not stored or sent anywhere.")
+
+            if keepAlive.requireAlways && keepAlive.locationAuthorization != .authorizedAlways {
+                NativeSafetyNote("Apply is blocked until location access is Always, or the requirement is turned off above.")
+            }
+            if keepAlive.locationAuthorization != .authorizedAlways {
+                Button("Enable Always Location") {
+                    keepAlive.requestAlwaysLocation()
+                }
+            }
+            if keepAlive.locationAuthorization == .denied
+                || keepAlive.locationAuthorization == .restricted {
+                Button("Open Settings", systemImage: "gear") {
+                    keepAlive.openAppSettings()
+                }
+            }
+        }
+        .task { keepAlive.refresh() }
+    }
+
+    private var locationStatus: String {
+        switch keepAlive.locationAuthorization {
+        case .authorizedAlways: return String(localized: "Always")
+        case .authorizedWhenInUse: return String(localized: "While Using")
+        case .denied: return String(localized: "Denied")
+        case .restricted: return String(localized: "Restricted")
+        case .notDetermined: return String(localized: "Not Requested")
+        @unknown default: return String(localized: "Unknown")
+        }
     }
 }

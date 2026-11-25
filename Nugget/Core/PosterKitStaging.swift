@@ -207,7 +207,7 @@ enum PosterKitStaging {
                     guard containsIndex(index) else {
                         throw GoldenNuggetError("Invalid archive object reference")
                     }
-                    value = objects[index] ?? NSObject()
+                    value = objects[index]
                 } else if let raw {
                     value = raw
                 } else {

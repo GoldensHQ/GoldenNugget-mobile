@@ -160,9 +160,11 @@ struct GoldenNuggetView: View {
     ///
     /// Note this initializer is also why one was needed at all: a custom `init()`
     /// suppresses the memberwise one, and the only `init()` this struct used to
-    /// have (a `UIDocumentPickerViewController` swizzle) could not initialize
+    /// have (a dead `UIDocumentPickerViewController` swizzle) could not initialize
     /// these — which surfaced as "return from initializer without initializing
-    /// all stored properties".
+    /// all stored properties". The working sideloaded-picker fix now lives in
+    /// `FilePickerSigningFix` and is installed from `GoldenNuggetApp`, so this
+    /// view needs no custom initializer for it.
     init(tweakSelection: Binding<TweakSelection>,
          posterBoardSelection: Binding<PosterBoardSelection>,
          statusBarSelection: Binding<StatusBarSelection>,
@@ -1140,6 +1142,11 @@ struct GoldenNuggetView: View {
         // summary.  A status-bar payload that cannot be built fails here, before
         // a confirmation the apply would then refuse.
         do {
+            // The Always-location requirement is checked before the summary so
+            // a refused apply never shows a confirmation the run cannot honour.
+            // This is the same rule `start()` enforces; here it also asks for
+            // the permission while the Apply button is still in view.
+            try ApplyKeepAlive.shared.requireAlwaysLocationForApply()
             let safety = HotLoadService.shared.currentPolicy
             var features: Set<String> = []
             if posterBoardSelection.isActive { features.insert("PosterBoard") }

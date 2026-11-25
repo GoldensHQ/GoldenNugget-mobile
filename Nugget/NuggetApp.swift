@@ -10,6 +10,12 @@ struct GoldenNuggetApp: App {
         // mean a session's minimuxer.log was recorded under the wrong setting.
         DevSettings.applyLoggingPreference()
 
+        // Sideloaders that re-sign with a certificate whose application ID does
+        // not match our bundle ID break UIKit's document picker. Install the
+        // fix before any view can present one; it is a no-op for correctly
+        // signed installs.
+        FilePickerSigningFix.install()
+
         // Desktop 9.7.10 marks the settings file with the build that last wrote
         // it. Mobile has many feature-local UserDefaults writers rather than one
         // Settings wrapper, so the observer is installed here: reads never

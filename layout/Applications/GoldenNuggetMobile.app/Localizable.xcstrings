@@ -187,6 +187,9 @@
     "AirLift (AirTraffic)" : {
 
     },
+    "AirLift PosterBoard injection is deprecated. It still works, but Protective backup is the supported path; use it for new applies." : {
+
+    },
     "AirLift needs a pairing record and none is stored. Import one on the home page." : {
 
     },
@@ -531,6 +534,9 @@
 
     },
     "Deselect All" : {
+
+    },
+    "Deprecated" : {
 
     },
     "Desktop app · this is a port of it" : {
@@ -1840,6 +1846,156 @@
     },
     "Every apply already backs up new and changed photos through the photo library. This adds a second, non-destructive copy of the device's Media tree via AFC. Only originals AFC cannot reach need it; deleting originals stays on the Media page." : {
 
+    },
+    "Background keepalive" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Background keepalive"
+          }
+        }
+      }
+    },
+    "While a run is applying, GoldenNugget keeps the screen awake and holds a background task so the restore can finish after you leave the app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "While a run is applying, GoldenNugget keeps the screen awake and holds a background task so the restore can finish after you leave the app."
+          }
+        }
+      }
+    },
+    "Location access" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Location access"
+          }
+        }
+      }
+    },
+    "Enable Always Location" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enable Always Location"
+          }
+        }
+      }
+    },
+    "Open Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
+    "Require Always Location for apply" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Require Always Location for apply"
+          }
+        }
+      }
+    },
+    "On by default. Apply is refused until location access is Always, so the run can continue in the background. Turn this off to apply without it; the screen and a short background task still keep the run alive." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On by default. Apply is refused until location access is Always, so the run can continue in the background. Turn this off to apply without it; the screen and a short background task still keep the run alive."
+          }
+        }
+      }
+    },
+    "Apply is blocked until location access is Always, or the requirement is turned off above." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apply is blocked until location access is Always, or the requirement is turned off above."
+          }
+        }
+      }
+    },
+    "Always" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Always"
+          }
+        }
+      }
+    },
+    "While Using" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "While Using"
+          }
+        }
+      }
+    },
+    "Denied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Denied"
+          }
+        }
+      }
+    },
+    "Restricted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Restricted"
+          }
+        }
+      }
+    },
+    "Not Requested" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not Requested"
+          }
+        }
+      }
+    },
+    "Unknown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "GoldenNugget uses Always location events to keep the apply running after you leave the app. Your location is not stored or sent anywhere." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "GoldenNugget uses Always location events to keep the apply running after you leave the app. Your location is not stored or sent anywhere."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

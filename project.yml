@@ -225,6 +225,14 @@ targets:
       - package: Minimuxer
         product: AirliftFFI
       - sdk: libsqlite3.tbd
+      # ApplyKeepAlive uses CoreLocation for the background keepalive. It is a
+      # system framework: link, do not embed. Mirror it in Package.swift's
+      # linkerSettings so the xtool path agrees.
+      - sdk: CoreLocation.framework
+      # FilePickerSigningFix calls the SecTask entitlement entry points in
+      # Security.framework. They have no public iOS headers, but the framework
+      # still has to be on the link line for the symbols to resolve.
+      - sdk: Security.framework
       # NeoSpring resprings by loading a payload into a WKWebView
       # (Nugget/Core/NeoSpring.swift), so WebKit has to be linked. It is a
       # system framework, so it is linked, not embedded.

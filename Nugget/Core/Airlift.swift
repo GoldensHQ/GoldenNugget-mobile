@@ -147,7 +147,10 @@ enum Airlift {
     /// fabricated global whose only purpose would be to be ignored.
     private static let logTrampoline: ALLogCallback = { _, msg in
         guard let msg else { return }
-        AppLog.write(String(cString: msg))
+        // The library emits one callback per transport event. Keeping every
+        // one in goldennugget.log used to bury the apply verdict; the full
+        // stream is still printed to the console by AppLog.log.
+        AppLog.writeDetail(String(cString: msg), family: "airlift")
     }
 
     /// Copy a heap string the FFI handed back, free it, and return the copy.

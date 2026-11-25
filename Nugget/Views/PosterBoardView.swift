@@ -21,8 +21,9 @@ import UniformTypeIdentifiers
 ///     rows in the store's own sqlite, and the database cannot be synthesised —
 ///     it has to be fetched from the device.  The card says when that happened
 ///     last, and the fetch is also the first stage of an apply that needs one.
-///     It is hidden on AirLift, which has no such stage: that mode writes the
-///     descriptors into the container and never touches the rows.
+///     It is hidden on the deprecated AirLift mode, which has no such stage:
+///     that mode writes the descriptors into the container and never touches
+///     the rows.
 ///   * **The unsafe-container warning** is shown on the pack row rather than in
 ///     a modal that appears on import: it is a property of the pack, and it stays
 ///     true for as long as the pack is listed.
@@ -59,9 +60,9 @@ struct PosterBoardView: View {
     ///
     /// `@AppStorage` would have been the shorter version, and the reason it is not
     /// used is that the mode has to be validated against the device on this page —
-    /// AirLift needs iOS 26.2 and a pairing record, and a picker that can hold a mode
-    /// the page will later refuse is a worse thing to show than one that cannot be
-    /// set here.
+    /// the deprecated AirLift mode needs iOS 26.2 and a pairing record, and a picker
+    /// that can hold a mode the page will later refuse is a worse thing to show than
+    /// one that cannot be set here.
     @State private var applyMode: PosterBoardApplyMode = .backup
 
     /// The imported pack awaiting a Convert / Install-as-is answer, if any. See
@@ -162,20 +163,32 @@ struct PosterBoardView: View {
     ///
     /// A `Picker` rather than a switch: this is a choice between two mechanisms
     /// with different costs, and a switch cannot show what the other option is.
-    /// The consequence of picking AirLift is spelled out under it, because
-    /// "AirLift" alone says nothing about the version floor or the reboot it
-    /// saves.
+    /// The deprecated AirLift option carries its own label, and the consequence
+    /// of picking it is spelled out under the picker, because the name alone
+    /// says nothing about the version floor, the reboot it saves, or the fact
+    /// that protective backup is now the supported path.
     private var applyModeSection: some View {
         Section {
             Picker("How to apply", selection: $applyMode) {
                 ForEach(PosterBoardApplyMode.allCases.filter { $0 != .airlift || !airliftHidden }) { mode in
-                    Text(mode.title).tag(mode)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(mode.title)
+                        if mode.isDeprecated {
+                            Text("Deprecated")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .tag(mode)
                 }
             }
             .onChange(of: applyMode) { _, mode in
                 if !airliftHidden { PosterBoardApplyModeSettings.current = mode }
             }
             NativeNote(applyMode.summary)
+            if applyMode.isDeprecated {
+                NativeSafetyNote(String(localized: "AirLift PosterBoard injection is deprecated. It still works, but Protective backup is the supported path; use it for new applies."))
+            }
             if applyMode == .airlift, !airliftBlocker.isEmpty {
                 NativeSafetyNote(airliftBlocker)
             }

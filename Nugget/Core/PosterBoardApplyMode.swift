@@ -14,11 +14,14 @@ import Foundation
 ///    record this app already holds and write straight into PosterBoard's data
 ///    container. No backup, no reboot — a respring is enough — but it needs
 ///    iOS 26.2+, LocalDevVPN, an unlocked device, and it cannot do a store reset.
+///    It remains functional but is **deprecated** for PosterBoard: the page labels
+///    it, new installs start on `.backup`, and the run log warns when it is used.
 ///
-/// AirLift is the default. The backup path is this port's original mechanism, not
-/// a better one: it costs a full protective backup and a reboot, and it only has
-/// something left to do that AirLift cannot — the store reset. A user who wants
-/// neither pays nothing for either default, so the cheaper one is the default.
+/// Protective backup is now the default. It costs a full backup and a reboot, but
+/// it is the supported path: it works on every device the rest of the app works
+/// on and is the only one that can do a store reset. A stored `.airlift` choice is
+/// still honoured so the deprecated path does not silently change under a user,
+/// but nothing new defaults to it.
 enum PosterBoardApplyMode: String, CaseIterable, Identifiable, Hashable {
     case backup
     case airlift
@@ -38,6 +41,13 @@ enum PosterBoardApplyMode: String, CaseIterable, Identifiable, Hashable {
         case .airlift: return "bolt.horizontal.circle.fill"
         }
     }
+
+    /// Whether the mode is still offered but no longer recommended.
+    ///
+    /// This is a product-level deprecation, not a compiler one: `.airlift` stays
+    /// available and is still called by both entry points, but the picker labels
+    /// it and the page explains why `.backup` is the default.
+    var isDeprecated: Bool { self == .airlift }
 
     /// What the apply will and will not do, in the user's terms.
     var summary: String {
@@ -67,13 +77,13 @@ enum PosterBoardApplyMode: String, CaseIterable, Identifiable, Hashable {
 enum PosterBoardApplyModeSettings {
     static let key = "PosterBoardApplyMode"
 
-    /// AirLift unless something says otherwise.
+    /// Protective backup unless the user chose the deprecated AirLift path.
     ///
-    /// The stored value is the only thing that can move this off AirLift, and a
-    /// device that has never touched the picker has nothing stored — so the
-    /// default is what such a device gets.
-    /// Resolve saved AirLift selections against the actual target without erasing
-    /// the user's preference for another, supported device.
+    /// A device that has never touched the picker has nothing stored, so the
+    /// default is what such a device gets: `.backup`, the supported path. A
+    /// stored `.airlift` choice is still read back, so deprecation does not
+    /// quietly change an apply a user has already set up. `resolved` then drops
+    /// that choice only when the device cannot use it at all.
     static func resolved(deviceVersion: String, buildVersion: String) -> PosterBoardApplyMode {
         if AirliftAvailability.isHidden(deviceVersion: deviceVersion, buildVersion: buildVersion) {
             return .backup
@@ -83,8 +93,8 @@ enum PosterBoardApplyModeSettings {
 
     static var current: PosterBoardApplyMode {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: key) else { return .airlift }
-            return PosterBoardApplyMode(rawValue: raw) ?? .airlift
+            guard let raw = UserDefaults.standard.string(forKey: key) else { return .backup }
+            return PosterBoardApplyMode(rawValue: raw) ?? .backup
         }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: key) }
     }

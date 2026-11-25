@@ -94,6 +94,14 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedFramework("UIKit"),
+                // FilePickerSigningFix reads the code signature's
+                // application-identifier to repair the sideloaded document
+                // picker. The SecTask entry points are private C symbols, so
+                // the framework has to be linked explicitly.
+                .linkedFramework("Security"),
+                // ApplyKeepAlive holds a background-location keepalive for the
+                // duration of an apply. It is a system framework: link it.
+                .linkedFramework("CoreLocation"),
                 // NeoSpring (Nugget/Core/NeoSpring.swift) resprings by loading a
                 // payload into a WKWebView, so WebKit has to be linked.
                 .linkedFramework("WebKit"),
